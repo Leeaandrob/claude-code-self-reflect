@@ -45,12 +45,19 @@ tqdm>=4.67.0
 
 # Human-readable formatting
 humanize>=4.13.0
+rich>=13.0.0
 
 # System utilities
 psutil>=7.0.0
 
 # HTTP requests (used in batch_monitor.py)
 requests>=2.31.0
+
+# ============================================================================
+# Code Quality
+# ============================================================================
+# AST-GREP for static code analysis
+ast-grep-py>=0.28.0
 
 # ============================================================================
 # MCP Server (optional - for development)
