@@ -6,7 +6,7 @@
 
 ### Executive Summary
 
-v2.5.17 resolves a **critical CPU overload issue** that was causing 1437% CPU usage and implements the production-ready streaming importer with comprehensive reliability improvements. This release marks the completion of the V2 token-aware chunking migration and introduces enhanced metadata extraction capabilities.
+v2.5.16 resolves a **critical CPU overload issue** that was causing 1437% CPU usage and implements the production-ready streaming importer with comprehensive reliability improvements. This release marks the completion of the V2 token-aware chunking migration and introduces enhanced metadata extraction capabilities.
 
 ## 🎯 Major Improvements
 
@@ -165,7 +165,7 @@ Special thanks to **Opus 4.1** and **GPT-5** for comprehensive code reviews that
 - **Performance Tuning**: CPU and memory optimization guide
 
 ### Updated Documentation
-- **README.md**: Added performance metrics and v2.5.17 features
+- **README.md**: Added performance metrics and v2.5.16 features
 - **Troubleshooting Guide**: Added streaming importer debugging steps
 - **API Reference**: Enhanced metadata extraction documentation
 
@@ -193,4 +193,4 @@ Special thanks to **Opus 4.1** and **GPT-5** for comprehensive code reviews that
 **Release Manager**: Claude Self-Reflect Team  
 **Release Date**: August 17, 2025  
 **Build**: Production-Ready Streaming Importer  
-**Full Changelog**: [v2.5.16...v2.5.17](https://github.com/ramakay/claude-self-reflect/compare/v2.5.16...v2.5.17)
+**Full Changelog**: [v2.5.16...v2.5.16](https://github.com/ramakay/claude-self-reflect/compare/v2.5.16...v2.5.16)
