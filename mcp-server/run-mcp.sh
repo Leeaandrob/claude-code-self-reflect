@@ -122,6 +122,19 @@ if [ ! -z "$EMBEDDING_MODEL" ]; then
     export EMBEDDING_MODEL="$EMBEDDING_MODEL"
 fi
 
+# Qwen/DashScope environment variables
+if [ ! -z "$DASHSCOPE_API_KEY" ]; then
+    export DASHSCOPE_API_KEY="$DASHSCOPE_API_KEY"
+fi
+
+if [ ! -z "$DASHSCOPE_ENDPOINT" ]; then
+    export DASHSCOPE_ENDPOINT="$DASHSCOPE_ENDPOINT"
+fi
+
+if [ ! -z "$EMBEDDING_PROVIDER" ]; then
+    export EMBEDDING_PROVIDER="$EMBEDDING_PROVIDER"
+fi
+
 # The embedding manager now handles cache properly in a controlled directory
 # Set to 'false' if you want to use HuggingFace instead of Qdrant CDN
 if [ -z "$FASTEMBED_SKIP_HUGGINGFACE" ]; then
@@ -131,6 +144,9 @@ fi
 # Debug: Show what environment variables are being passed
 echo "[DEBUG] Environment variables for MCP server:" >&2
 echo "[DEBUG] VOYAGE_KEY: ${VOYAGE_KEY:+set}" >&2
+echo "[DEBUG] DASHSCOPE_API_KEY: ${DASHSCOPE_API_KEY:+set}" >&2
+echo "[DEBUG] DASHSCOPE_ENDPOINT: ${DASHSCOPE_ENDPOINT:-not set}" >&2
+echo "[DEBUG] EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-not set}" >&2
 echo "[DEBUG] PREFER_LOCAL_EMBEDDINGS: ${PREFER_LOCAL_EMBEDDINGS:-not set}" >&2
 echo "[DEBUG] QDRANT_URL: ${QDRANT_URL:-not set}" >&2
 echo "[DEBUG] ENABLE_MEMORY_DECAY: ${ENABLE_MEMORY_DECAY:-not set}" >&2

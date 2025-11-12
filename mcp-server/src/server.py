@@ -91,6 +91,9 @@ USE_NATIVE_DECAY = os.getenv('USE_NATIVE_DECAY', 'false').lower() == 'true'
 # CRITICAL: Default changed to 'true' for local embeddings for privacy
 PREFER_LOCAL_EMBEDDINGS = os.getenv('PREFER_LOCAL_EMBEDDINGS', 'true').lower() == 'true'
 EMBEDDING_MODEL = os.getenv('EMBEDDING_MODEL', 'sentence-transformers/all-MiniLM-L6-v2')
+EMBEDDING_PROVIDER = os.getenv('EMBEDDING_PROVIDER', 'local').lower()
+DASHSCOPE_API_KEY = os.getenv('DASHSCOPE_API_KEY')
+DASHSCOPE_ENDPOINT = os.getenv('DASHSCOPE_ENDPOINT', 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1')
 
 # Import the robust embedding manager
 from .embedding_manager import get_embedding_manager
@@ -198,6 +201,9 @@ logger.debug(f"DECAY_WEIGHT: {DECAY_WEIGHT}")
 logger.debug(f"DECAY_SCALE_DAYS: {DECAY_SCALE_DAYS}")
 logger.debug(f"PREFER_LOCAL_EMBEDDINGS: {PREFER_LOCAL_EMBEDDINGS}")
 logger.debug(f"EMBEDDING_MODEL: {EMBEDDING_MODEL}")
+logger.debug(f"EMBEDDING_PROVIDER: {EMBEDDING_PROVIDER}")
+logger.debug(f"DASHSCOPE_API_KEY: {'set' if DASHSCOPE_API_KEY else 'not set'}")
+logger.debug(f"DASHSCOPE_ENDPOINT: {DASHSCOPE_ENDPOINT}")
 logger.debug(f"env_path: {env_path}")
 
 

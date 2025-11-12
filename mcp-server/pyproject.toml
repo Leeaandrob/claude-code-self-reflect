@@ -16,6 +16,8 @@ dependencies = [
     "pydantic-settings>=2.0.0,<3.0.0",
     "fastembed>=0.4.0,<1.0.0",
     "dependency-injector>=4.0.0,<5.0.0",
+    "aiofiles>=23.0.0,<24.0.0",
+    "openai>=1.0.0,<2.0.0",  # OpenAI SDK for DashScope/Qwen compatibility
 ]
 
 [project.scripts]

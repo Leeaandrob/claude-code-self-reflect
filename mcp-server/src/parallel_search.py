@@ -35,8 +35,16 @@ async def search_single_collection(
     results = []
     
     try:
-        # Determine embedding type for this collection
-        embedding_type_for_collection = 'voyage' if collection_name.endswith('_voyage') else 'local'
+        # Determine embedding type for this collection based on suffix
+        if collection_name.endswith('_qwen_2048d'):
+            embedding_type_for_collection = 'qwen'
+        elif collection_name.endswith('_voyage') or collection_name.endswith('_cloud_1024d'):
+            embedding_type_for_collection = 'voyage'
+        elif collection_name.endswith('_local_384d'):
+            embedding_type_for_collection = 'local'
+        else:
+            # Legacy collections without suffix - default to local
+            embedding_type_for_collection = 'local'
         logger.debug(f"Collection {collection_name} needs {embedding_type_for_collection} embedding")
 
         # Generate or retrieve cached embedding for this type
@@ -146,7 +154,7 @@ async def search_single_collection(
                     raw_timestamp = point.payload.get('timestamp', datetime.now().isoformat())
                     clean_timestamp = raw_timestamp.replace('Z', '+00:00') if raw_timestamp.endswith('Z') else raw_timestamp
                     
-                    point_project = point.payload.get('project', collection_name.replace('conv_', '').replace('_voyage', '').replace('_local', ''))
+                    point_project = point.payload.get('project', collection_name.replace('conv_', '').replace('_voyage', '').replace('_local_384d', '').replace('_cloud_1024d', '').replace('_qwen_2048d', '').replace('csr_', ''))
                     
                     # Apply project filtering
                     if target_project != 'all' and not is_reflection_collection:
@@ -189,7 +197,7 @@ async def search_single_collection(
                     raw_timestamp = point.payload.get('timestamp', datetime.now().isoformat())
                     clean_timestamp = raw_timestamp.replace('Z', '+00:00') if raw_timestamp.endswith('Z') else raw_timestamp
 
-                    point_project = point.payload.get('project', collection_name.replace('conv_', '').replace('_voyage', '').replace('_local', ''))
+                    point_project = point.payload.get('project', collection_name.replace('conv_', '').replace('_voyage', '').replace('_local_384d', '').replace('_cloud_1024d', '').replace('_qwen_2048d', '').replace('csr_', ''))
                     
                     # Apply project filtering
                     if target_project != 'all' and not is_reflection_collection:

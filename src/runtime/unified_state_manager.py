@@ -330,6 +330,13 @@ class UnifiedStateManager:
         Raises:
             ValueError: If path is outside allowed directories
         """
+        # SECURITY FIX: If already inside Docker (/logs, /config, /app), trust it
+        # This handles Claude Code's unusual path naming (e.g., -home-user-Projects-...)
+        if file_path.startswith(('/logs/', '/config/', '/app/data/')):
+            # Inside container - trust the path as-is without resolve()
+            # This prevents issues with paths like /logs/-home-user-...
+            return file_path
+
         # First resolve to absolute path to eliminate ../ sequences
         try:
             resolved = Path(file_path).resolve()

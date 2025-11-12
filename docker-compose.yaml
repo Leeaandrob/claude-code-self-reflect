@@ -2,10 +2,10 @@ volumes:
   qdrant_data:
 
 services:
-  # Fix permissions for config directory (UID 1001 matches appuser in Dockerfiles)
+  # Fix permissions for config directory (UID 1000 matches local user)
   init-permissions:
     image: alpine
-    command: sh -c "chown -R 1001:1001 /config && chown -R 1001:1001 /batch_queue && chown -R 1001:1001 /batch_state"
+    command: sh -c "chown -R 1000:1000 /config && chown -R 1000:1000 /batch_queue && chown -R 1000:1000 /batch_state"
     volumes:
       - ${CONFIG_PATH:-${HOME}/.claude-self-reflect/config}:/config
       - ${CSR_BATCH_QUEUE_DIR:-${HOME}/.claude-self-reflect/batch_queue}:/batch_queue
@@ -44,15 +44,19 @@ services:
       - ${CONFIG_PATH:-${HOME}/.claude-self-reflect/config}:/config
     environment:
       - QDRANT_URL=http://qdrant:6333
-      - STATE_FILE=/config/imported-files.json
+      - STATE_FILE=/config/unified-state.json
       - LOGS_DIR=/logs
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - VOYAGE_API_KEY=${VOYAGE_API_KEY:-}
       - VOYAGE_KEY=${VOYAGE_KEY:-}
+      - DASHSCOPE_API_KEY=${DASHSCOPE_API_KEY:-}
+      - DASHSCOPE_ENDPOINT=${DASHSCOPE_ENDPOINT:-https://dashscope-intl.aliyuncs.com/compatible-mode/v1}
+      - EMBEDDING_PROVIDER=${EMBEDDING_PROVIDER:-local}
       - PREFER_LOCAL_EMBEDDINGS=${PREFER_LOCAL_EMBEDDINGS:-true}
       - EMBEDDING_MODEL=${EMBEDDING_MODEL:-voyage-3}
-      - BATCH_SIZE=${BATCH_SIZE:-50}
-      - CHUNK_SIZE=${CHUNK_SIZE:-10}
+      - BATCH_SIZE=${BATCH_SIZE:-100}  # Increased from 50 to 100 files per cycle
+      - CHUNK_SIZE=${CHUNK_SIZE:-50}   # Increased from 10 to 50 messages per chunk
+      - MAX_CONCURRENT_EMBEDDINGS=${MAX_CONCURRENT_EMBEDDINGS:-10}  # Allow 10 concurrent API calls
       - PYTHONUNBUFFERED=1
       - PYTHONPATH=/app
     restart: "no"
@@ -106,6 +110,9 @@ services:
       - STATE_FILE=/config/streaming-state.json  # FIXED: Use streaming-specific state file
       - VOYAGE_API_KEY=${VOYAGE_API_KEY:-}
       - VOYAGE_KEY=${VOYAGE_KEY:-}
+      - DASHSCOPE_API_KEY=${DASHSCOPE_API_KEY:-}
+      - DASHSCOPE_ENDPOINT=${DASHSCOPE_ENDPOINT:-https://dashscope-intl.aliyuncs.com/compatible-mode/v1}
+      - EMBEDDING_PROVIDER=${EMBEDDING_PROVIDER:-local}
       - PREFER_LOCAL_EMBEDDINGS=${PREFER_LOCAL_EMBEDDINGS:-true}
       # Production CPU throttling settings
       - MAX_CPU_PERCENT_PER_CORE=25  # 25% per core = 400% total on 16 cores
@@ -145,6 +152,9 @@ services:
       - STATE_FILE=/config/imported-files.json
       - VOYAGE_API_KEY=${VOYAGE_API_KEY:-}
       - VOYAGE_KEY=${VOYAGE_KEY:-}
+      - DASHSCOPE_API_KEY=${DASHSCOPE_API_KEY:-}
+      - DASHSCOPE_ENDPOINT=${DASHSCOPE_ENDPOINT:-https://dashscope-intl.aliyuncs.com/compatible-mode/v1}
+      - EMBEDDING_PROVIDER=${EMBEDDING_PROVIDER:-local}
       - PREFER_LOCAL_EMBEDDINGS=${PREFER_LOCAL_EMBEDDINGS:-true}
       - WATCH_INTERVAL=${WATCH_INTERVAL:-5}
       - MAX_MEMORY_MB=${MAX_MEMORY_MB:-2000}
@@ -177,30 +187,37 @@ services:
       - ${CONFIG_PATH:-${HOME}/.claude-self-reflect/config}:/config
     environment:
       - QDRANT_URL=http://qdrant:6333
-      - STATE_FILE=/config/csr-watcher.json
+      - STATE_FILE=/config/unified-state.json  # FIXED: Use unified state manager
       - LOGS_DIR=/logs  # Fixed: Point to mounted volume
       - VOYAGE_KEY=${VOYAGE_KEY:-}
+      - VOYAGE_API_KEY=${VOYAGE_KEY:-}  # FIX: streaming-watcher.py expects VOYAGE_API_KEY
+      - DASHSCOPE_API_KEY=${DASHSCOPE_API_KEY:-}
+      - DASHSCOPE_ENDPOINT=${DASHSCOPE_ENDPOINT:-https://dashscope-intl.aliyuncs.com/compatible-mode/v1}
       - PREFER_LOCAL_EMBEDDINGS=${PREFER_LOCAL_EMBEDDINGS:-true}
+      - EMBEDDING_PROVIDER=${EMBEDDING_PROVIDER:-auto}
+      - MAX_CONCURRENT_EMBEDDINGS=${MAX_CONCURRENT_EMBEDDINGS:-5}
       - ENABLE_MEMORY_DECAY=${ENABLE_MEMORY_DECAY:-false}
       - DECAY_WEIGHT=${DECAY_WEIGHT:-0.3}
       - DECAY_SCALE_DAYS=${DECAY_SCALE_DAYS:-90}
-      - CHECK_INTERVAL_S=${CHECK_INTERVAL_S:-60}
+      - IMPORT_FREQUENCY=${IMPORT_FREQUENCY:-30}  # OPTIMIZED: Faster check interval (was 60s)
       - HOT_CHECK_INTERVAL_S=${HOT_CHECK_INTERVAL_S:-2}
       - HOT_WINDOW_MINUTES=${HOT_WINDOW_MINUTES:-5}
       - WARM_WINDOW_HOURS=${WARM_WINDOW_HOURS:-24}
-      - MAX_COLD_FILES=${MAX_COLD_FILES:-5}
+      - MAX_COLD_FILES=${MAX_COLD_FILES:-20}  # OPTIMIZED: Increased from 5 to 20
       - MAX_WARM_WAIT_MINUTES=${MAX_WARM_WAIT_MINUTES:-30}
+      - BATCH_SIZE=${BATCH_SIZE:-30}  # OPTIMIZED: Increased from 10 to 30
       - MAX_MESSAGES_PER_CHUNK=${MAX_MESSAGES_PER_CHUNK:-10}
       - MAX_CHUNK_SIZE=${MAX_CHUNK_SIZE:-50}  # Messages per chunk for streaming
-      - MEMORY_LIMIT_MB=${MEMORY_LIMIT_MB:-1000}
-      - MEMORY_WARNING_MB=${MEMORY_WARNING_MB:-500}
+      - MEMORY_LIMIT_MB=${MEMORY_LIMIT_MB:-1500}  # OPTIMIZED: Increased to 1.5GB
+      - MEMORY_WARNING_MB=${MEMORY_WARNING_MB:-750}  # OPTIMIZED: Proportional increase
+      - MAX_QUEUE_SIZE=${MAX_QUEUE_SIZE:-200}  # OPTIMIZED: Increased queue capacity
       - PYTHONUNBUFFERED=1
       - MALLOC_ARENA_MAX=2
     restart: unless-stopped
     profiles: ["safe-watch", "watch"]  # Requires explicit profile to run
-    mem_limit: 1g  # Increased to 1GB to match MEMORY_LIMIT_MB
-    memswap_limit: 1g
-    cpus: 1.0  # Single CPU core limit
+    mem_limit: 2g  # OPTIMIZED: Increased to 2GB for better throughput
+    memswap_limit: 2g
+    cpus: 2.0  # OPTIMIZED: Increased to 2 CPU cores for parallel processing
 
   # MCP server for Claude integration
   mcp-server:
@@ -213,6 +230,9 @@ services:
     environment:
       - QDRANT_URL=http://qdrant:6333
       - VOYAGE_KEY=${VOYAGE_KEY:-}
+      - DASHSCOPE_API_KEY=${DASHSCOPE_API_KEY:-}
+      - DASHSCOPE_ENDPOINT=${DASHSCOPE_ENDPOINT:-https://dashscope-intl.aliyuncs.com/compatible-mode/v1}
+      - EMBEDDING_PROVIDER=${EMBEDDING_PROVIDER:-local}
       - PREFER_LOCAL_EMBEDDINGS=${PREFER_LOCAL_EMBEDDINGS:-true}
       - ENABLE_MEMORY_DECAY=${ENABLE_MEMORY_DECAY:-true}
       - DECAY_WEIGHT=${DECAY_WEIGHT:-0.3}

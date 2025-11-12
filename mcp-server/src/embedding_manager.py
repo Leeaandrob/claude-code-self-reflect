@@ -14,15 +14,19 @@ logger = logging.getLogger(__name__)
 
 class EmbeddingManager:
     """Manages embedding models with proper cache and lock handling."""
-    
+
     def __init__(self):
         self.local_model = None
         self.voyage_client = None
-        self.model_type = None  # Default model type ('local' or 'voyage')
+        self.qwen_client = None
+        self.model_type = None  # Default model type ('local', 'voyage', or 'qwen')
 
         # Configuration
+        self.embedding_provider = os.getenv('EMBEDDING_PROVIDER', 'local').lower()
         self.prefer_local = os.getenv('PREFER_LOCAL_EMBEDDINGS', 'true').lower() == 'true'
         self.voyage_key = os.getenv('VOYAGE_KEY') or os.getenv('VOYAGE_KEY-2')
+        self.dashscope_key = os.getenv('DASHSCOPE_API_KEY')
+        self.dashscope_endpoint = os.getenv('DASHSCOPE_ENDPOINT', 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1')
         self.embedding_model = os.getenv('EMBEDDING_MODEL', 'sentence-transformers/all-MiniLM-L6-v2')
         self.download_timeout = int(os.getenv('FASTEMBED_DOWNLOAD_TIMEOUT', '30'))
 
@@ -52,17 +56,33 @@ class EmbeddingManager:
     def initialize(self) -> bool:
         """Initialize embedding models based on configuration."""
         logger.info("Initializing embedding manager...")
+        logger.info(f"Embedding provider: {self.embedding_provider}")
 
         # Clean up any stale locks first
         self._clean_stale_locks()
 
         local_success = False
         voyage_success = False
+        qwen_success = False
 
-        # Only initialize models we actually need
-        if not self.prefer_local and self.voyage_key:
-            # Cloud mode: Skip local initialization to avoid error messages
-            logger.info("Cloud mode requested, skipping local model initialization")
+        # Priority order based on EMBEDDING_PROVIDER
+        if self.embedding_provider == 'qwen' and self.dashscope_key:
+            # Qwen/DashScope mode
+            logger.info("Qwen/DashScope mode requested")
+            qwen_success = self._try_initialize_qwen()
+            if qwen_success:
+                self.model_type = 'qwen'
+                logger.info("Using QWEN embeddings (text-embedding-v4, 2048 dimensions)")
+            else:
+                # Fallback to local if qwen fails
+                logger.warning("Qwen initialization failed, falling back to local")
+                local_success = self._try_initialize_local()
+                if local_success:
+                    self.model_type = 'local'
+
+        elif self.embedding_provider == 'voyage' and self.voyage_key:
+            # Voyage AI mode
+            logger.info("Voyage AI mode requested")
             voyage_success = self._try_initialize_voyage()
             if voyage_success:
                 self.model_type = 'voyage'
@@ -73,29 +93,21 @@ class EmbeddingManager:
                 local_success = self._try_initialize_local()
                 if local_success:
                     self.model_type = 'local'
+
         else:
-            # Local mode or mixed mode support
+            # Local mode or auto-detect
+            if self.embedding_provider not in ['local', 'qwen', 'voyage']:
+                logger.warning(f"Unknown provider '{self.embedding_provider}', defaulting to local")
+
             local_success = self._try_initialize_local()
-
-            # Only initialize voyage if NOT preferring local
-            if self.voyage_key and not self.prefer_local:
-                voyage_success = self._try_initialize_voyage()
-
-            # Set default model type - prefer_local takes priority
-            if self.prefer_local and local_success:
+            if local_success:
                 self.model_type = 'local'
-                logger.info("Using LOCAL embeddings (384 dimensions) - preferred")
-            elif voyage_success:
-                self.model_type = 'voyage'
-                logger.info("Using VOYAGE embeddings (1024 dimensions)")
-            elif local_success:
-                self.model_type = 'local'
-                logger.info("Using LOCAL embeddings (fallback)")
+                logger.info("Using LOCAL embeddings (384 dimensions)")
             else:
-                logger.error("Failed to initialize any embedding model")
+                logger.error("Failed to initialize local embedding model")
                 return False
 
-        logger.info(f"Embedding models available - Local: {local_success}, Voyage: {voyage_success}")
+        logger.info(f"Embedding models available - Local: {local_success}, Voyage: {voyage_success}, Qwen: {qwen_success}")
         return True
     
     def _try_initialize_local(self) -> bool:
@@ -188,6 +200,41 @@ class EmbeddingManager:
             logger.error(f"Unexpected error initializing local embeddings: {e}")
             return False
     
+    def _try_initialize_qwen(self) -> bool:
+        """Try to initialize Qwen/DashScope client."""
+        return self.try_initialize_qwen()
+
+    def try_initialize_qwen(self) -> bool:
+        """Public method to initialize Qwen/DashScope client using OpenAI SDK."""
+        try:
+            logger.info("Attempting to initialize Qwen/DashScope via OpenAI SDK...")
+            from openai import OpenAI
+
+            # Initialize OpenAI client with DashScope endpoint
+            self.qwen_client = OpenAI(
+                api_key=self.dashscope_key,
+                base_url=self.dashscope_endpoint
+            )
+
+            # Test the client with a simple embedding using text-embedding-v4
+            response = self.qwen_client.embeddings.create(
+                model="text-embedding-v4",
+                input="test",
+                dimensions=2048  # Default dimension for v4
+            )
+
+            if response.data and len(response.data) > 0:
+                self.model_type = 'qwen'
+                logger.info(f"Successfully initialized Qwen/DashScope (text-embedding-v4, 2048d)")
+                return True
+            else:
+                logger.error("Qwen/DashScope test embedding returned no data")
+                return False
+
+        except Exception as e:
+            logger.error(f"Failed to initialize Qwen/DashScope: {e}")
+            return False
+
     def _try_initialize_voyage(self) -> bool:
         """Try to initialize Voyage AI client."""
         return self.try_initialize_voyage()
@@ -230,6 +277,9 @@ class EmbeddingManager:
         elif use_type == 'voyage' and not self.voyage_client:
             logger.error("Voyage client not initialized")
             return None
+        elif use_type == 'qwen' and not self.qwen_client:
+            logger.error("Qwen client not initialized")
+            return None
 
         # Ensure texts is a list
         if isinstance(texts, str):
@@ -250,6 +300,17 @@ class EmbeddingManager:
                 )
                 return result.embeddings
 
+            elif use_type == 'qwen':
+                # Use OpenAI SDK with DashScope text-embedding-v4 (2048 dimensions)
+                response = self.qwen_client.embeddings.create(
+                    model="text-embedding-v4",
+                    input=texts,
+                    dimensions=2048
+                )
+
+                # Extract embeddings from response
+                return [item.embedding for item in response.data]
+
         except Exception as e:
             logger.error(f"Error generating embeddings with {use_type}: {e}")
             return None
@@ -261,16 +322,26 @@ class EmbeddingManager:
             return 384  # all-MiniLM-L6-v2 dimension
         elif use_type == 'voyage':
             return 1024  # voyage-3 dimension
+        elif use_type == 'qwen':
+            return 2048  # text-embedding-v4 dimension
         return 0
-    
+
     def get_model_info(self) -> dict:
         """Get information about the active model."""
+        model_name = self.embedding_model
+        if self.model_type == 'voyage':
+            model_name = 'voyage-3'
+        elif self.model_type == 'qwen':
+            model_name = 'text-embedding-v4'
+
         return {
             'type': self.model_type,
-            'model': self.embedding_model if self.model_type == 'local' else 'voyage-3',
+            'model': model_name,
             'dimension': self.get_vector_dimension(),
+            'embedding_provider': self.embedding_provider,
             'prefer_local': self.prefer_local,
-            'has_voyage_key': bool(self.voyage_key)
+            'has_voyage_key': bool(self.voyage_key),
+            'has_qwen_key': bool(self.dashscope_key)
         }
     
     async def generate_embedding(self, text: str, force_type: str = None) -> Optional[List[float]]:

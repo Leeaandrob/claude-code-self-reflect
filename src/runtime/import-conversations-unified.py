@@ -328,7 +328,13 @@ def main():
         projects = [project_path]
     else:
         # Import all projects
-        claude_dir = Path.home() / ".claude" / "projects"
+        # Check for LOGS_DIR env var first (for Docker), then fall back to default
+        logs_dir = os.getenv("LOGS_DIR")
+        if logs_dir:
+            claude_dir = Path(logs_dir)
+        else:
+            claude_dir = Path.home() / ".claude" / "projects"
+
         if not claude_dir.exists():
             logger.error(f"Claude projects directory not found: {claude_dir}")
             sys.exit(1)

@@ -56,8 +56,11 @@ class Config:
     qdrant_api_key: Optional[str] = field(default_factory=lambda: os.getenv("QDRANT_API_KEY"))
     require_tls_for_remote: bool = field(default_factory=lambda: os.getenv("QDRANT_REQUIRE_TLS_FOR_REMOTE", "true").lower() == "true")
     voyage_api_key: Optional[str] = field(default_factory=lambda: os.getenv("VOYAGE_API_KEY"))
+    qwen_api_key: Optional[str] = field(default_factory=lambda: os.getenv("DASHSCOPE_API_KEY"))
+    qwen_endpoint: str = field(default_factory=lambda: os.getenv("DASHSCOPE_ENDPOINT", "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"))
     prefer_local_embeddings: bool = field(default_factory=lambda: os.getenv("PREFER_LOCAL_EMBEDDINGS", "true").lower() == "true")
     embedding_model: str = field(default_factory=lambda: os.getenv("EMBEDDING_MODEL", "sentence-transformers/all-MiniLM-L6-v2"))
+    embedding_provider: str = field(default_factory=lambda: os.getenv("EMBEDDING_PROVIDER", "auto"))  # auto, qwen, voyage, local
     
     logs_dir: Path = field(default_factory=lambda: Path(os.getenv("LOGS_DIR", "~/.claude/projects")).expanduser())
     
@@ -398,6 +401,7 @@ class VoyageProvider(EmbeddingProvider):
         self.api_key = api_key
         self.model_name = model_name
         self.vector_size = 1024  # voyage-3 dimension
+        self.provider_type = 'voyage'
         self.semaphore = asyncio.Semaphore(max_concurrent)
         self.base_url = "https://api.voyageai.com/v1/embeddings"
         self.session = None
@@ -468,9 +472,86 @@ class VoyageProvider(EmbeddingProvider):
             self.session = None
 
 
+class QwenProvider(EmbeddingProvider):
+    """Qwen/DashScope provider using OpenAI-compatible API."""
+
+    def __init__(self, api_key: str, endpoint: str, model_name: str = "text-embedding-v4", max_concurrent: int = 5):
+        self.api_key = api_key
+        self.endpoint = endpoint
+        self.model_name = model_name
+        self.vector_size = 1024  # text-embedding-v4 default dimension
+        self.provider_type = 'qwen'
+        self.semaphore = asyncio.Semaphore(max_concurrent)
+        self.session = None
+        self.max_retries = 3
+        self.retry_delay = 1.0
+
+    async def _ensure_session(self):
+        """Ensure aiohttp session exists."""
+        if self.session is None:
+            import aiohttp
+            self.session = aiohttp.ClientSession()
+
+    async def embed_documents(self, texts: List[str]) -> List[List[float]]:
+        """Generate embeddings using DashScope OpenAI-compatible API."""
+        await self._ensure_session()
+
+        async with self.semaphore:
+            for attempt in range(self.max_retries):
+                try:
+                    import aiohttp
+                    headers = {
+                        "Authorization": f"Bearer {self.api_key}",
+                        "Content-Type": "application/json"
+                    }
+
+                    payload = {
+                        "input": texts,
+                        "model": self.model_name
+                    }
+
+                    async with self.session.post(
+                        f"{self.endpoint}/embeddings",
+                        headers=headers,
+                        json=payload,
+                        timeout=aiohttp.ClientTimeout(total=30)
+                    ) as response:
+                        if response.status == 200:
+                            data = await response.json()
+                            # OpenAI format: data.data[].embedding
+                            embeddings = [item["embedding"] for item in data["data"]]
+                            return embeddings
+                        elif response.status == 429:  # Rate limit
+                            retry_after = int(response.headers.get("Retry-After", 2))
+                            logger.warning(f"Qwen rate limited, retrying after {retry_after}s")
+                            await asyncio.sleep(retry_after)
+                        else:
+                            error_text = await response.text()
+                            logger.error(f"Qwen API error {response.status}: {error_text}")
+                            if attempt < self.max_retries - 1:
+                                await asyncio.sleep(self.retry_delay * (2 ** attempt))
+
+                except asyncio.TimeoutError:
+                    logger.warning(f"Qwen API timeout (attempt {attempt + 1}/{self.max_retries})")
+                    if attempt < self.max_retries - 1:
+                        await asyncio.sleep(self.retry_delay * (2 ** attempt))
+                except Exception as e:
+                    logger.error(f"Qwen API error: {e}")
+                    if attempt < self.max_retries - 1:
+                        await asyncio.sleep(self.retry_delay * (2 ** attempt))
+
+            raise Exception(f"Failed to get Qwen embeddings after {self.max_retries} attempts")
+
+    async def close(self):
+        """Close aiohttp session."""
+        if self.session:
+            await self.session.close()
+            self.session = None
+
+
 class QdrantService:
     """Qdrant service with proper backpressure and retries."""
-    
+
     def __init__(self, config: Config, embedding_provider: EmbeddingProvider):
         self.config = config
 
@@ -786,7 +867,9 @@ class StreamingWatcher:
     
     def __init__(self, config: Config):
         self.config = config
-        self.state_manager = UnifiedStateManager()
+        # Initialize state manager with STATE_FILE env var if present
+        state_file = os.getenv("STATE_FILE")
+        self.state_manager = UnifiedStateManager(state_file) if state_file else UnifiedStateManager()
         self.embedding_provider = self._create_embedding_provider()
         self.qdrant_service = QdrantService(config, self.embedding_provider)
         self.chunker = TokenAwareChunker()
@@ -874,20 +957,56 @@ class StreamingWatcher:
         return level, int(priority_score)
     
     def _create_embedding_provider(self) -> EmbeddingProvider:
-        """Create embedding provider based on configuration."""
-        if not self.config.prefer_local_embeddings and self.config.voyage_api_key:
-            logger.info("Using Voyage AI for cloud embeddings")
-            return VoyageProvider(
-                api_key=self.config.voyage_api_key,
-                model_name="voyage-3",  # Latest Voyage model with 1024 dimensions
+        """Create embedding provider based on configuration with priority: Qwen > Voyage > Local."""
+
+        # Explicit provider selection
+        if self.config.embedding_provider == "qwen" and self.config.qwen_api_key:
+            logger.info(f"Using Qwen/DashScope: text-embedding-v4 (1024d) - Endpoint: {self.config.qwen_endpoint}")
+            return QwenProvider(
+                api_key=self.config.qwen_api_key,
+                endpoint=self.config.qwen_endpoint,
+                model_name="text-embedding-v4",
                 max_concurrent=self.config.max_concurrent_embeddings
             )
-        else:
-            logger.info(f"Using FastEmbed: {self.config.embedding_model}")
+        elif self.config.embedding_provider == "voyage" and self.config.voyage_api_key:
+            logger.info("Using Voyage AI: voyage-3 (1024d)")
+            return VoyageProvider(
+                api_key=self.config.voyage_api_key,
+                model_name="voyage-3",
+                max_concurrent=self.config.max_concurrent_embeddings
+            )
+        elif self.config.embedding_provider == "local":
+            logger.info(f"Using FastEmbed: {self.config.embedding_model} (384d)")
             return FastEmbedProvider(
                 self.config.embedding_model,
                 self.config.max_concurrent_embeddings
             )
+
+        # Auto mode: Priority order based on availability
+        if not self.config.prefer_local_embeddings:
+            # Cloud mode: Qwen > Voyage > FastEmbed
+            if self.config.qwen_api_key:
+                logger.info(f"Auto-selected Qwen/DashScope: text-embedding-v4 (1024d)")
+                return QwenProvider(
+                    api_key=self.config.qwen_api_key,
+                    endpoint=self.config.qwen_endpoint,
+                    model_name="text-embedding-v4",
+                    max_concurrent=self.config.max_concurrent_embeddings
+                )
+            elif self.config.voyage_api_key:
+                logger.info("Auto-selected Voyage AI: voyage-3 (1024d)")
+                return VoyageProvider(
+                    api_key=self.config.voyage_api_key,
+                    model_name="voyage-3",
+                    max_concurrent=self.config.max_concurrent_embeddings
+                )
+
+        # Fallback to local
+        logger.info(f"Using FastEmbed: {self.config.embedding_model} (384d)")
+        return FastEmbedProvider(
+            self.config.embedding_model,
+            self.config.max_concurrent_embeddings
+        )
     
     async def load_state(self) -> None:
         """Load persisted state using UnifiedStateManager."""
@@ -905,10 +1024,22 @@ class StreamingWatcher:
     
     
     def get_collection_name(self, project_path: str) -> str:
-        """Get collection name for project."""
+        """Get collection name for project with correct provider suffix."""
         normalized = normalize_project_name(project_path)
         project_hash = hashlib.md5(normalized.encode()).hexdigest()[:8]
-        suffix = "_local" if self.config.prefer_local_embeddings else "_voyage"
+
+        # Determine suffix based on actual provider in use
+        provider_type = getattr(self.embedding_provider, 'provider_type', 'unknown')
+        if provider_type == 'local' or isinstance(self.embedding_provider, FastEmbedProvider):
+            suffix = "_local_384d"
+        elif isinstance(self.embedding_provider, QwenProvider):
+            suffix = "_qwen_1024d"
+        elif isinstance(self.embedding_provider, VoyageProvider):
+            suffix = "_voyage_1024d"
+        else:
+            # Fallback to old logic
+            suffix = "_local" if self.config.prefer_local_embeddings else "_voyage"
+
         return f"{self.config.collection_prefix}_{project_hash}{suffix}"
     
     def _extract_message_text(self, content: Any) -> str:

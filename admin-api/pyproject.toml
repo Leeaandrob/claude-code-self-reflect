@@ -1,0 +1,33 @@
+[project]
+name = "claude-self-reflect-admin-api"
+version = "1.0.0"
+description = "Admin API for Claude Self-Reflect"
+authors = [
+    {name = "Claude Self-Reflect Contributors"}
+]
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi==0.115.0",
+    "uvicorn[standard]==0.32.0",
+    "pydantic==2.10.0",
+    "python-dotenv==1.0.1",
+    "qdrant-client==1.12.1",
+    "aiofiles==24.1.0",
+    "python-multipart==0.0.16",
+    "watchdog==6.0.0",
+    "psutil==6.1.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+    "httpx>=0.27.0",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
