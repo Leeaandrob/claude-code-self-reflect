@@ -176,7 +176,7 @@ FILES: docker-compose.yaml
 ```
 
 **Implementation:**
-- `docs/design/batch_import_all_projects.py` - Batch job creator
+- `src/batch/batch_import_all_projects.py` - Batch job creator
 - `src/runtime/batch_watcher.py` - Auto-triggers when 10+ conversations
 - `src/runtime/batch_monitor.py` - Polls Anthropic API for results
 - Docker profile: `batch-automation` (requires ANTHROPIC_API_KEY)
@@ -206,6 +206,38 @@ FILES: docker-compose.yaml
 - `tests/test_unified_state.py` - State management tests
 - `tests/test_npm_package_contents.py` - Package validation
 - `tests/integration/` - End-to-end integration tests
+
+## Project Organization & Cleanup (2025-11-12)
+
+The project underwent comprehensive cleanup to improve maintainability:
+
+### What Was Cleaned
+- **41 historical release notes** archived (v2-v5) → `docs/archive/historical-releases/`
+- **8 obsolete migration scripts** archived (v1-v4) → `scripts/migration/archive/`
+- **7 unused Dockerfiles** removed (Alpine, Ubuntu, isolated variants)
+- **8 root .md files** moved to `docs/` (analysis, operations, testing)
+- **6 import script variants** consolidated → `scripts/dev/archive/import-variants/`
+- **Operational batch scripts** relocated → `src/batch/`
+
+### Current File Organization Policy
+1. **Root directory**: Only 5 essential .md files (README, CHANGELOG, CONTRIBUTING, SECURITY, CLAUDE.md)
+2. **Reports & analysis**: Always go to `docs/analysis/`
+3. **Operational docs**: Go to `docs/operations/`
+4. **Deprecated code**: Move to `*/deprecated/` with README explaining why
+5. **Historical files**: Archive with context (never delete without archiving)
+
+### Dockerfiles (8 active, 100% utilized)
+All Dockerfiles map 1:1 to docker-compose.yaml profiles:
+- `Dockerfile.importer` → profile: import
+- `Dockerfile.safe-watcher` → profile: safe-watch (**RECOMMENDED**)
+- `Dockerfile.streaming-importer` → profile: async
+- `Dockerfile.async-importer` → profile: async
+- `Dockerfile.batch-watcher` → profile: batch-automation
+- `Dockerfile.batch-monitor` → profile: batch-automation
+- `Dockerfile.mcp-server` → profile: mcp
+- `Dockerfile.watcher` → profile: watch-old (DEPRECATED)
+
+**Policy**: Do NOT add Alpine/Ubuntu variants without clear production use case.
 
 ## Common Development Patterns
 
@@ -262,7 +294,7 @@ async with UnifiedStateManager() as state:
 The docker-compose.yaml defines 8 profiles:
 - `import` - One-time import
 - `watch` - DEPRECATED (use safe-watch)
-- `safe-watch` - Production file watcher
+- `safe-watch` - Production file watcher (**RECOMMENDED**)
 - `async` - Async importer (performance testing)
 - `mcp` - MCP server via Docker
 - `batch-automation` - v7.0 AI narratives (requires ANTHROPIC_API_KEY)
@@ -276,6 +308,41 @@ docker compose --profile batch-automation up -d
 docker compose ps
 docker compose logs -f
 ```
+
+## Admin Panel (v7.0+)
+
+Web-based dashboard for monitoring and managing the system. **Not included in npm package** (separate deployment).
+
+### Quick Start
+```bash
+# Start admin panel + API
+./start-admin.sh
+
+# Access
+# Panel: http://localhost:3000
+# API: http://localhost:8000
+
+# Stop
+./stop-admin.sh
+```
+
+### Features
+- **Dashboard** - System metrics and status
+- **Projects** - Project management and statistics
+- **Imports** - Import monitoring and status
+- **Collections** - Qdrant collection administration
+- **Batch Jobs** - v7.0 AI narrative jobs monitoring
+- **Docker** - Container management
+- **Settings** - Configuration management
+- **Logs** - Real-time log viewer
+
+### Tech Stack
+- **Frontend**: React + TypeScript + Vite + Tailwind CSS + shadcn/ui
+- **Backend**: FastAPI + Uvicorn + async Python
+- **Location**: `admin-panel/` (252MB) + `admin-api/` (265MB)
+
+### Security Note
+⚠️ **No authentication** - Localhost only (production deployment needs auth layer)
 
 ## Breaking Changes & Migration
 
@@ -320,10 +387,40 @@ docker compose logs -f
 4. **Embedding errors**: Check `~/.claude-self-reflect/logs/mcp-server.log`
 5. **Docker issues**: Check `docker compose logs` for specific service
 
+## Documentation Structure
+
+After 2025-11-12 cleanup and reorganization:
+
+### Root Directory (Essentials Only)
+- `README.md` - Main project documentation
+- `CHANGELOG.md` - Complete version history
+- `CONTRIBUTING.md` - Contribution guidelines
+- `SECURITY.md` - Security policies
+- `CLAUDE.md` - This file (Claude Code guidance)
+
+### docs/ Organization
+- **docs/analysis/** - Technical reports, evaluations, system assessments
+  - Project cleanup reports (CLEANUP_SUMMARY.md, DOCKERFILES_CLEANUP.md)
+  - System evaluations (embedding certification, unified state)
+  - Code quality reports (CodeRabbit, AST-grep analysis)
+- **docs/operations/** - Release management, packaging checklists
+- **docs/testing/** - Certification reports, test validations
+- **docs/architecture/** - System design documents
+- **docs/development/** - Developer guides (includes MCP_REFERENCE.md)
+- **docs/installation/** - Installation guides
+- **docs/integration/** - Integration patterns
+
+### Archived (Historical Reference)
+- **docs/archive/historical-releases/** - v2-v5 release notes
+- **scripts/migration/archive/** - Old migration scripts (v1-v4)
+- **scripts/dev/archive/import-variants/** - Import script evolution
+- **archived/** - Deprecated Docker compose files
+
 ## Additional Resources
 
 - **MCP Reference**: `docs/development/MCP_REFERENCE.md`
 - **Architecture Details**: `docs/architecture/`
 - **Release History**: `CHANGELOG.md`
-- **Security**: `SECURITY.md`
-- **Contributing**: `CONTRIBUTING.md`
+- **Analysis Reports**: `docs/analysis/README.md`
+- **Operations Guide**: `docs/operations/README.md`
+- **Test Reports**: `docs/testing/README.md`
