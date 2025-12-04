@@ -18,11 +18,11 @@ CONFIG_PATH = Path(os.getenv('CONFIG_PATH', '/config'))
 if not CONFIG_PATH.exists():
     CONFIG_PATH = Path.home() / '.claude-self-reflect' / 'config'
 
-# Batch state directories - use /tmp in Docker, home dir outside
+# Batch state directories - use /config in Docker for shared access between containers
 if Path('/config').exists():
-    # Running in Docker
-    BATCH_STATE_DIR = Path('/tmp/batch_state')
-    BATCH_FILES_DIR = Path('/tmp/batch_files')
+    # Running in Docker - use /config for persistence and sharing between containers
+    BATCH_STATE_DIR = Path('/config/batch_state')
+    BATCH_FILES_DIR = Path('/config/batch_files')
 else:
     # Running outside Docker
     CSR_HOME = Path.home() / '.claude-self-reflect'
