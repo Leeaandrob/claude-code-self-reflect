@@ -100,7 +100,8 @@ export function Settings() {
   }
 
   const currentMode = config.mode
-  const currentConfig = currentMode === 'local' ? config.local : currentMode === 'voyage' ? config.voyage : config.qwen
+  const currentConfig = currentMode === 'local' ? config.local : currentMode === 'voyage' ? config.voyage : currentMode === 'qwen' ? config.qwen : config.cloud
+  const defaultConfig = { model: 'unknown', dimension: 0, api_key_set: false }
 
   return (
     <div className="p-6 space-y-6">
@@ -138,7 +139,7 @@ export function Settings() {
                 Model
               </div>
               <p className="text-sm font-mono bg-muted px-3 py-2 rounded-md">
-                {currentConfig.model}
+                {(currentConfig ?? defaultConfig).model}
               </p>
             </div>
 
@@ -148,7 +149,7 @@ export function Settings() {
                 Dimension
               </div>
               <p className="text-sm font-mono bg-muted px-3 py-2 rounded-md">
-                {currentConfig.dimension}d
+                {(currentConfig ?? defaultConfig).dimension}d
               </p>
             </div>
 
@@ -157,8 +158,8 @@ export function Settings() {
                 <div className="text-sm font-medium text-muted-foreground">
                   API Key Status
                 </div>
-                <Badge variant={currentConfig.api_key_set ? 'success' : 'destructive'}>
-                  {currentConfig.api_key_set ? 'Configured' : 'Missing'}
+                <Badge variant={(currentConfig ?? defaultConfig).api_key_set ? 'success' : 'destructive'}>
+                  {(currentConfig ?? defaultConfig).api_key_set ? 'Configured' : 'Missing'}
                 </Badge>
               </div>
             )}
@@ -233,7 +234,7 @@ export function Settings() {
               {currentMode !== 'voyage' && (
                 <Button
                   onClick={() => handleSwitchMode('voyage')}
-                  disabled={switching || !config.voyage.api_key_set}
+                  disabled={switching || !config.voyage?.api_key_set}
                   variant="outline"
                   size="sm"
                   className="w-full"
@@ -248,7 +249,7 @@ export function Settings() {
                   )}
                 </Button>
               )}
-              {currentMode !== 'voyage' && !config.voyage.api_key_set && (
+              {currentMode !== 'voyage' && !config.voyage?.api_key_set && (
                 <p className="text-xs text-destructive mt-2">
                   Set VOYAGE_KEY
                 </p>
@@ -272,7 +273,7 @@ export function Settings() {
               {currentMode !== 'qwen' && (
                 <Button
                   onClick={() => handleSwitchMode('qwen')}
-                  disabled={switching || !config.qwen.api_key_set}
+                  disabled={switching || !config.qwen?.api_key_set}
                   variant="outline"
                   size="sm"
                   className="w-full"
@@ -287,7 +288,7 @@ export function Settings() {
                   )}
                 </Button>
               )}
-              {currentMode !== 'qwen' && !config.qwen.api_key_set && (
+              {currentMode !== 'qwen' && !config.qwen?.api_key_set && (
                 <p className="text-xs text-destructive mt-2">
                   Set DASHSCOPE_API_KEY
                 </p>

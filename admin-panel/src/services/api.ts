@@ -2,17 +2,17 @@
  * API client for Claude Self-Reflect Admin Panel
  */
 
-// Try to get API URL from runtime config (set by start-admin.sh)
-// Otherwise fallback to env var or default
+// Try to get API URL from runtime config (set by docker-entrypoint.sh or start-admin.sh)
+// In Docker: uses /api (nginx proxy to admin-api:8000)
+// Outside Docker: falls back to env var or localhost:8000
 const getApiUrl = () => {
   if (typeof window !== 'undefined' && (window as any).ADMIN_CONFIG?.API_URL) {
     return (window as any).ADMIN_CONFIG.API_URL;
   }
-  return import.meta.env.VITE_API_URL || 'http://localhost:8003/api';
+  return import.meta.env.VITE_API_URL || '/api';
 };
 
-//const API_BASE_URL = getApiUrl();
-const API_BASE_URL = "http://192.168.50.136:8003/api";
+const API_BASE_URL = getApiUrl();
 
 class ApiClient {
   private baseURL: string;
@@ -81,7 +81,7 @@ class ApiClient {
     return this.request('/settings/embedding');
   }
 
-  async updateEmbeddingMode(mode: 'local' | 'cloud') {
+  async updateEmbeddingMode(mode: 'local' | 'cloud' | 'voyage' | 'qwen') {
     return this.request('/settings/embedding/mode', {
       method: 'POST',
       body: JSON.stringify({ mode }),

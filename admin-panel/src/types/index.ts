@@ -86,16 +86,16 @@ export interface LogEntry {
   message: string
 }
 
+export interface EmbeddingModeConfig {
+  model: string
+  dimension: number
+  api_key_set?: boolean
+}
+
 export interface EmbeddingConfig {
-  mode: 'local' | 'cloud'
-  local: {
-    model: string
-    dimension: number
-  }
-  cloud: {
-    provider: 'voyage' | 'openai'
-    model: string
-    dimension: number
-    api_key_set: boolean
-  }
+  mode: 'local' | 'cloud' | 'voyage' | 'qwen'
+  local?: EmbeddingModeConfig
+  cloud?: EmbeddingModeConfig & { provider?: string }
+  voyage?: EmbeddingModeConfig
+  qwen?: EmbeddingModeConfig
 }

@@ -94,6 +94,46 @@ services:
     tty: true
     profiles: ["mcp"]
 
+  # Admin API - FastAPI backend for admin panel
+  admin-api:
+    build:
+      context: .
+      dockerfile: Dockerfile.admin-api
+    container_name: claude-reflection-admin-api
+    depends_on:
+      - qdrant
+    volumes:
+      - ${CONFIG_PATH:-${HOME}/.claude-self-reflect/config}:/config:ro
+      - ${CLAUDE_LOGS_PATH:-${HOME}/.claude/projects}:/logs:ro
+    environment:
+      - QDRANT_URL=http://qdrant:6333
+      - CONFIG_PATH=/config
+      - LOGS_DIR=/logs
+      - STATE_FILE=/config/unified-state.json
+      - PYTHONUNBUFFERED=1
+    restart: unless-stopped
+    profiles: ["admin"]
+    mem_limit: 512m
+
+  # Admin Panel - React frontend served by Nginx
+  admin:
+    build:
+      context: .
+      dockerfile: Dockerfile.admin
+    container_name: claude-reflection-admin
+    depends_on:
+      - admin-api
+      - qdrant
+    ports:
+      - "${ADMIN_PORT:-3000}:80"
+    environment:
+      - API_URL=http://admin-api:8000
+      - QDRANT_URL=http://qdrant:6333
+      - APP_VERSION=${npm_package_version:-1.0.0}
+      - NODE_ENV=production
+    restart: unless-stopped
+    profiles: ["admin"]
+
 networks:
   default:
     name: claude-reflection-network

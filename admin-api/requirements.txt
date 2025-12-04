@@ -6,3 +6,4 @@ qdrant-client==1.12.1
 aiofiles==24.1.0
 python-multipart==0.0.16
 watchdog==6.0.0
+psutil==6.1.0
