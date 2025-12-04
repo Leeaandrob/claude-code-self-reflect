@@ -32,7 +32,6 @@ from .temporal_utils import SessionDetector, TemporalParser, WorkSession, group_
 from .temporal_tools import register_temporal_tools
 from .search_tools import register_search_tools
 from .reflection_tools import register_reflection_tools
-from .mode_switch_tool import register_mode_switch_tool
 from .code_reload_tool import register_code_reload_tool
 from pydantic import BaseModel, Field
 from qdrant_client import AsyncQdrantClient, models
@@ -87,11 +86,8 @@ logger = logging.getLogger(__name__)
 DECAY_SCALE_DAYS = float(os.getenv('DECAY_SCALE_DAYS', '90'))
 USE_NATIVE_DECAY = os.getenv('USE_NATIVE_DECAY', 'false').lower() == 'true'
 
-# Embedding configuration - now using lazy initialization
-# CRITICAL: Default changed to 'true' for local embeddings for privacy
-PREFER_LOCAL_EMBEDDINGS = os.getenv('PREFER_LOCAL_EMBEDDINGS', 'true').lower() == 'true'
-EMBEDDING_MODEL = os.getenv('EMBEDDING_MODEL', 'sentence-transformers/all-MiniLM-L6-v2')
-EMBEDDING_PROVIDER = os.getenv('EMBEDDING_PROVIDER', 'local').lower()
+# Embedding configuration - cloud only (Qwen/DashScope or Voyage)
+EMBEDDING_PROVIDER = os.getenv('EMBEDDING_PROVIDER', 'cloud').lower()
 DASHSCOPE_API_KEY = os.getenv('DASHSCOPE_API_KEY')
 DASHSCOPE_ENDPOINT = os.getenv('DASHSCOPE_ENDPOINT', 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1')
 
@@ -137,11 +133,11 @@ class EmbeddingState:
     def __init__(self):
         self.embedding_manager = None
         self.voyage_client = None  # Keep for backward compatibility
-        self.local_embedding_model = None  # Keep for backward compatibility
+        self.qwen_client = None  # Keep for backward compatibility
         self._initialized = False
 
     def initialize_embeddings(self):
-        """Initialize embedding models with robust fallback."""
+        """Initialize cloud embedding models."""
         if self._initialized:
             return True
 
@@ -152,8 +148,8 @@ class EmbeddingState:
             # Set backward compatibility references
             if self.embedding_manager.model_type == 'voyage':
                 self.voyage_client = self.embedding_manager.voyage_client
-            elif self.embedding_manager.model_type == 'local':
-                self.local_embedding_model = self.embedding_manager.local_model
+            elif self.embedding_manager.model_type == 'qwen':
+                self.qwen_client = self.embedding_manager.qwen_client
 
             self._initialized = True
             return True
@@ -199,8 +195,6 @@ logger.debug(f"ENABLE_MEMORY_DECAY: {ENABLE_MEMORY_DECAY}")
 logger.debug(f"USE_NATIVE_DECAY: {USE_NATIVE_DECAY}")
 logger.debug(f"DECAY_WEIGHT: {DECAY_WEIGHT}")
 logger.debug(f"DECAY_SCALE_DAYS: {DECAY_SCALE_DAYS}")
-logger.debug(f"PREFER_LOCAL_EMBEDDINGS: {PREFER_LOCAL_EMBEDDINGS}")
-logger.debug(f"EMBEDDING_MODEL: {EMBEDDING_MODEL}")
 logger.debug(f"EMBEDDING_PROVIDER: {EMBEDDING_PROVIDER}")
 logger.debug(f"DASHSCOPE_API_KEY: {'set' if DASHSCOPE_API_KEY else 'not set'}")
 logger.debug(f"DASHSCOPE_ENDPOINT: {DASHSCOPE_ENDPOINT}")
@@ -585,67 +579,38 @@ async def get_all_collections() -> List[str]:
             if c.name.endswith('_voyage') or c.name.endswith('_local') or c.name.startswith('reflections')]
 
 async def generate_embedding(text: str, force_type: Optional[str] = None) -> List[float]:
-    """Generate embedding using configured provider or forced type.
+    """Generate embedding using cloud provider (Qwen or Voyage).
 
     Args:
         text: Text to embed
-        force_type: Force specific embedding type ('local' or 'voyage')
+        force_type: Force specific embedding type ('qwen' or 'voyage')
     """
     # Initialize on first use
     if embedding_state.embedding_manager is None:
         if not embedding_state.initialize_embeddings():
-            raise RuntimeError("Failed to initialize any embedding model. Check logs for details.")
+            raise RuntimeError("Failed to initialize cloud embedding model. Check DASHSCOPE_API_KEY or VOYAGE_KEY.")
 
-    # Determine which type to use
-    if force_type:
-        use_local = force_type == 'local'
-    else:
-        use_local = embedding_state.embedding_manager.model_type == 'local'
-
-    if use_local:
-        # Use local embeddings
-        if not embedding_state.local_embedding_model:
-            raise ValueError("Local embedding model not available")
-
-        # Run in executor since fastembed is synchronous
-        loop = asyncio.get_event_loop()
-        embeddings = await loop.run_in_executor(
-            None, lambda: list(embedding_state.local_embedding_model.embed([text]))
-        )
-        return embeddings[0].tolist()
-    else:
-        # Use Voyage AI
-        if not embedding_state.voyage_client:
-            raise ValueError("Voyage client not available")
-        result = embedding_state.voyage_client.embed(
-            texts=[text],
-            model="voyage-3-large",
-            input_type="query"
-        )
-        return result.embeddings[0]
+    # Use the embedding manager
+    result = await embedding_state.embedding_manager.generate_embedding(text, force_type=force_type)
+    if result is None:
+        raise ValueError("Failed to generate embedding")
+    return result
 
 def get_embedding_dimension() -> int:
     """Get the dimension of embeddings based on the provider."""
-    if PREFER_LOCAL_EMBEDDINGS or not embedding_state.voyage_client:
-        # all-MiniLM-L6-v2 produces 384-dimensional embeddings
-        return 384
-    else:
-        # voyage-3-large produces 1024-dimensional embeddings
-        return 1024
+    if embedding_state.embedding_manager:
+        return embedding_state.embedding_manager.get_vector_dimension()
+    # Default to Qwen dimension
+    return 2048
 
 def get_collection_suffix() -> str:
     """Get the collection suffix based on embedding provider."""
-    # Use embedding_manager's model type if available
     if embedding_state.embedding_manager and hasattr(embedding_state.embedding_manager, 'model_type'):
         if embedding_state.embedding_manager.model_type == 'voyage':
             return "_voyage"
-        else:
-            return "_local"
-    # Fallback to environment variable
-    elif PREFER_LOCAL_EMBEDDINGS:
-        return "_local"
-    else:
-        return "_voyage"
+        elif embedding_state.embedding_manager.model_type == 'qwen':
+            return "_qwen"
+    return "_cloud"
 
 def aggregate_pattern_intelligence(results: List[SearchResult]) -> Dict[str, Any]:
     """Aggregate pattern intelligence across search results."""
@@ -768,12 +733,6 @@ register_reflection_tools(
     QDRANT_URL,
     get_embedding_manager,
     normalize_project_name
-)
-
-# Register mode switching tools
-register_mode_switch_tool(
-    mcp,
-    get_embedding_manager
 )
 
 # Register code reload tools

@@ -1,22 +1,22 @@
-"""Embedding providers for text vectorization."""
+"""Cloud embedding providers for text vectorization."""
 
 from .base import EmbeddingProvider
-from .fastembed_provider import FastEmbedProvider
 from .validator import EmbeddingValidator
 
-# Conditional import for Voyage
+# Conditional imports for cloud providers
+__all__ = [
+    "EmbeddingProvider",
+    "EmbeddingValidator"
+]
+
 try:
     from .voyage_provider import VoyageEmbeddingProvider
-    __all__ = [
-        "EmbeddingProvider",
-        "FastEmbedProvider",
-        "VoyageEmbeddingProvider",
-        "EmbeddingValidator"
-    ]
+    __all__.append("VoyageEmbeddingProvider")
 except ImportError:
-    # Voyage not available, continue without it
-    __all__ = [
-        "EmbeddingProvider",
-        "FastEmbedProvider",
-        "EmbeddingValidator"
-    ]
+    pass
+
+try:
+    from .qwen_provider import QwenEmbeddingProvider
+    __all__.append("QwenEmbeddingProvider")
+except ImportError:
+    pass

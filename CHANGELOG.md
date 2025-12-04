@@ -5,6 +5,95 @@ All notable changes to Claude Self-Reflect will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [8.0.0] - 2025-12-04
+
+### 🎯 MAJOR: Cloud-Only Architecture
+
+**Simplified** • **Faster Setup** • **Better Quality**
+
+v8.0.0 removes local embeddings and batch automation, focusing on cloud-only embeddings (Qwen/DashScope or Voyage AI) for the best search quality with minimal complexity.
+
+### BREAKING CHANGES
+
+#### Local Embeddings Removed
+- **FastEmbed removed**: No longer supports local 384-dimension embeddings
+- **Qwen or Voyage API key required**: Must have `DASHSCOPE_API_KEY` or `VOYAGE_KEY`
+- **Impact**: New installations must configure cloud embedding provider
+
+#### Batch Automation Removed
+- **v7.0 AI Narratives removed**: Batch automation services eliminated
+- **ANTHROPIC_API_KEY no longer needed**: Simplified deployment
+- **Impact**: Existing batch jobs will not process; raw embeddings continue to work
+
+### Removed
+
+#### Docker Services (6 removed)
+- `Dockerfile.batch-watcher` - Batch automation watcher
+- `Dockerfile.batch-monitor` - Batch API monitor
+- `Dockerfile.watcher` - Deprecated watcher
+- `Dockerfile.streaming-importer` - Streaming import
+- `Dockerfile.async-importer` - Async import
+- `Dockerfile.importer` - One-time import
+
+#### Source Files
+- `src/batch/` - Entire batch processing system
+- `src/runtime/batch_watcher.py` - Batch watcher service
+- `src/runtime/batch_monitor.py` - Batch monitor service
+- `src/importer/embeddings/fastembed_provider.py` - Local embeddings
+- `mcp-server/src/mode_switch_tool.py` - Runtime mode switching
+
+#### Scripts (60+ removed)
+- Development scripts (`scripts/dev/`)
+- Quality analysis (`scripts/quality/`)
+- Migration archives (`scripts/migration/archive/`)
+- Evaluation tools (`scripts/evaluation/`)
+- Debug utilities (`scripts/debug/`)
+- CI/deployment scripts (`scripts/ci/`, `scripts/deployment/`)
+
+### Changed
+
+#### Architecture Simplified
+- **4 Docker services only**: qdrant, init-permissions, safe-watcher, mcp-server
+- **2 Docker profiles**: safe-watch, mcp
+- **Cloud-only embeddings**: Qwen (2048d) or Voyage (1024d)
+
+#### Dependencies
+- Removed `fastembed` from pyproject.toml
+- Removed `auto-migrate.cjs` from postinstall
+
+### What's Still Working
+
+- **MCP Server**: All 20+ search and reflection tools
+- **Qdrant Vector DB**: Semantic search with cloud embeddings
+- **Safe-Watcher**: HOT/WARM/COLD prioritized import
+- **Memory Decay**: Time-weighted search results
+- **Project-Scoped Search**: Automatic project isolation
+- **Admin Panel**: Web dashboard for monitoring (separate deployment)
+
+### Migration Guide
+
+1. **Ensure cloud API key is set**:
+   ```bash
+   # Option 1: Qwen/DashScope (recommended)
+   export DASHSCOPE_API_KEY=your_key
+
+   # Option 2: Voyage AI
+   export VOYAGE_KEY=your_key
+   ```
+
+2. **Update to v8.0.0**:
+   ```bash
+   npm update -g claude-self-reflect
+   ```
+
+3. **Restart services**:
+   ```bash
+   docker compose down
+   docker compose --profile safe-watch up -d
+   ```
+
+4. **Existing data**: All cloud-embedded conversations continue to work. Local embeddings (384d) are incompatible and will need re-import.
+
 ## [7.0.0] - 2025-10-28
 
 ### 🚀 MAJOR FEATURE: Automated Narrative Generation
