@@ -31,8 +31,10 @@ def is_searchable_collection(name: str) -> bool:
         or name.endswith('_voyage')
         # v4 patterns
         or name.endswith('_384d')  # Local v4 collections
-        or name.endswith('_1024d')  # Cloud v4 collections
+        or name.endswith('_1024d')  # Cloud v4 collections (voyage 1024d)
+        or name.endswith('_2048d')  # Cloud v4 collections (qwen 2048d)
         or '_cloud_' in name  # Cloud v4 intermediate naming
+        or '_qwen_' in name  # Qwen collections (any dimension)
         # Reflections
         or name.startswith('reflections')
         # CSR prefixed collections

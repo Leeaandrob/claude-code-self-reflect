@@ -112,10 +112,22 @@ class EmbeddingManager:
             logger.error(f"Failed to initialize Voyage AI: {e}")
             return False
 
-    def embed(self, texts: Union[str, List[str]], input_type: str = "document", force_type: str = None) -> Optional[List[List[float]]]:
-        """Generate embeddings using cloud models."""
+    def embed(self, texts: Union[str, List[str]], input_type: str = "document", force_type: str = None, dimensions: int = None) -> Optional[List[List[float]]]:
+        """Generate embeddings using cloud models.
+
+        Args:
+            texts: Text(s) to embed
+            input_type: Type of input ("document" or "query")
+            force_type: Force specific model type ('voyage', 'qwen', or 'qwen_1024d')
+            dimensions: Override dimensions for qwen (1024 or 2048)
+        """
         use_type = force_type if force_type else self.model_type
-        logger.debug(f"Embedding with: force_type={force_type}, self.model_type={self.model_type}, use_type={use_type}")
+        logger.debug(f"Embedding with: force_type={force_type}, self.model_type={self.model_type}, use_type={use_type}, dimensions={dimensions}")
+
+        # Handle qwen_1024d as special case
+        if use_type == 'qwen_1024d':
+            use_type = 'qwen'
+            dimensions = 1024
 
         if use_type == 'voyage' and not self.voyage_client:
             logger.error("Voyage client not initialized")
@@ -137,10 +149,12 @@ class EmbeddingManager:
                 return result.embeddings
 
             elif use_type == 'qwen':
+                # Use provided dimensions or default to 2048
+                qwen_dimensions = dimensions if dimensions else 2048
                 response = self.qwen_client.embeddings.create(
                     model="text-embedding-v4",
                     input=texts,
-                    dimensions=2048
+                    dimensions=qwen_dimensions
                 )
                 return [item.embedding for item in response.data]
 
@@ -170,9 +184,9 @@ class EmbeddingManager:
             'has_qwen_key': bool(self.dashscope_key)
         }
 
-    async def generate_embedding(self, text: str, force_type: str = None) -> Optional[List[float]]:
+    async def generate_embedding(self, text: str, force_type: str = None, dimensions: int = None) -> Optional[List[float]]:
         """Generate embedding for a single text (async wrapper)."""
-        result = self.embed(text, input_type="query", force_type=force_type)
+        result = self.embed(text, input_type="query", force_type=force_type, dimensions=dimensions)
         if result and len(result) > 0:
             return result[0]
         return None

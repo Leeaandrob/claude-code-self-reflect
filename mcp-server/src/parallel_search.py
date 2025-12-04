@@ -38,13 +38,16 @@ async def search_single_collection(
         # Determine embedding type for this collection based on suffix
         if collection_name.endswith('_qwen_2048d'):
             embedding_type_for_collection = 'qwen'
+        elif collection_name.endswith('_qwen_1024d'):
+            # Qwen with 1024d - use qwen_1024d for correct dimensionality
+            embedding_type_for_collection = 'qwen_1024d'
         elif collection_name.endswith('_voyage') or collection_name.endswith('_cloud_1024d'):
             embedding_type_for_collection = 'voyage'
         elif collection_name.endswith('_local_384d'):
             embedding_type_for_collection = 'local'
         else:
-            # Legacy collections without suffix - default to local
-            embedding_type_for_collection = 'local'
+            # Legacy collections without suffix - try voyage as fallback for cloud-only mode
+            embedding_type_for_collection = 'voyage'
         logger.debug(f"Collection {collection_name} needs {embedding_type_for_collection} embedding")
 
         # Generate or retrieve cached embedding for this type
