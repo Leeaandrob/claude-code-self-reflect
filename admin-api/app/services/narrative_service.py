@@ -17,7 +17,7 @@ DASHSCOPE_EMBEDDING_URL = os.getenv(
     'https://dashscope-intl.aliyuncs.com/compatible-mode/v1/embeddings'
 )
 EMBEDDING_MODEL = os.getenv('EMBEDDING_MODEL', 'text-embedding-v3')
-EMBEDDING_DIMENSION = 2048  # Qwen embedding dimension
+EMBEDDING_DIMENSION = 1024  # Qwen embedding dimension (1024d for consistency with conv collections)
 
 
 class NarrativeService:
@@ -47,7 +47,8 @@ class NarrativeService:
         data = {
             "model": EMBEDDING_MODEL,
             "input": text,
-            "encoding_format": "float"
+            "encoding_format": "float",
+            "dimensions": EMBEDDING_DIMENSION
         }
 
         async with aiohttp.ClientSession() as session:

@@ -509,40 +509,42 @@ export function BatchJobs() {
       {/* Create Job Modal */}
       {showCreateModal && (
         <div
-          className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50"
+          className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50"
           onClick={() => setShowCreateModal(false)}
         >
-          <Card
-            className="max-w-4xl w-full max-h-[80vh] overflow-auto"
+          <div
+            className="bg-background border border-border rounded-lg shadow-2xl max-w-4xl w-full max-h-[80vh] overflow-auto"
             onClick={(e: React.MouseEvent) => e.stopPropagation()}
           >
-            <CardHeader>
+            <div className="p-6 border-b border-border">
               <div className="flex items-start justify-between">
                 <div>
-                  <CardTitle>Create Batch Job</CardTitle>
-                  <CardDescription>Select conversations to generate narratives</CardDescription>
+                  <h2 className="text-xl font-semibold text-foreground">Create Batch Job</h2>
+                  <p className="text-sm text-muted-foreground mt-1">Select conversations to generate narratives</p>
                 </div>
                 <Button variant="ghost" size="icon" onClick={() => setShowCreateModal(false)}>
                   <X className="h-4 w-4" />
                 </Button>
               </div>
-            </CardHeader>
-            <CardContent className="space-y-6">
+            </div>
+            <div className="p-6 space-y-6">
               {/* Model Selection */}
               <div>
-                <label className="text-sm font-medium mb-2 block">Model</label>
-                <div className="grid gap-2 md:grid-cols-3">
+                <label className="text-sm font-medium text-foreground mb-3 block">Select Model</label>
+                <div className="grid gap-3 md:grid-cols-3">
                   {models.map((model) => (
                     <div
                       key={model.id}
-                      className={`p-3 border rounded-lg cursor-pointer transition-colors ${
-                        selectedModel === model.id ? 'border-primary bg-primary/5' : 'hover:border-muted-foreground'
+                      className={`p-4 border-2 rounded-lg cursor-pointer transition-all ${
+                        selectedModel === model.id
+                          ? 'border-primary bg-primary/10 ring-2 ring-primary/20'
+                          : 'border-border hover:border-primary/50 bg-card'
                       }`}
                       onClick={() => setSelectedModel(model.id)}
                     >
-                      <p className="font-medium">{model.name}</p>
-                      <p className="text-xs text-muted-foreground mt-1">{model.description}</p>
-                      <p className="text-xs text-muted-foreground mt-1">
+                      <p className="font-semibold text-foreground">{model.name}</p>
+                      <p className="text-sm text-muted-foreground mt-1">{model.description}</p>
+                      <p className="text-xs text-primary mt-2 font-medium">
                         {model.price_input} / {model.price_output}
                       </p>
                     </div>
@@ -552,25 +554,28 @@ export function BatchJobs() {
 
               {/* Conversations Selection */}
               <div>
-                <div className="flex items-center justify-between mb-2">
-                  <label className="text-sm font-medium">
-                    Conversations without narratives ({pendingConversations.length})
+                <div className="flex items-center justify-between mb-3">
+                  <label className="text-sm font-medium text-foreground">
+                    Conversations without narratives ({pendingConversations.length} available)
                   </label>
                   <Button variant="outline" size="sm" onClick={selectAllConversations}>
                     {selectedConversations.length === pendingConversations.length ? 'Deselect All' : 'Select All'}
                   </Button>
                 </div>
-                <div className="border rounded-lg max-h-64 overflow-auto">
+                <div className="border border-border rounded-lg max-h-72 overflow-auto bg-card">
                   {pendingConversations.length === 0 ? (
-                    <p className="p-4 text-center text-muted-foreground">
-                      All conversations already have narratives!
-                    </p>
+                    <div className="p-8 text-center">
+                      <CheckCircle className="h-12 w-12 mx-auto text-green-500 mb-3" />
+                      <p className="text-muted-foreground">All conversations already have narratives!</p>
+                    </div>
                   ) : (
                     pendingConversations.map((conv) => (
                       <div
                         key={conv.id}
-                        className={`p-2 border-b last:border-b-0 flex items-center gap-3 cursor-pointer hover:bg-secondary/50 ${
-                          selectedConversations.includes(conv.id) ? 'bg-primary/10' : ''
+                        className={`p-3 border-b border-border last:border-b-0 flex items-center gap-3 cursor-pointer transition-colors ${
+                          selectedConversations.includes(conv.id)
+                            ? 'bg-primary/15 hover:bg-primary/20'
+                            : 'hover:bg-muted/50'
                         }`}
                         onClick={() => toggleConversation(conv.id)}
                       >
@@ -578,15 +583,15 @@ export function BatchJobs() {
                           type="checkbox"
                           checked={selectedConversations.includes(conv.id)}
                           onChange={() => {}}
-                          className="h-4 w-4"
+                          className="h-4 w-4 rounded border-border"
                         />
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-mono truncate">{conv.id}</p>
+                          <p className="text-sm font-mono text-foreground truncate">{conv.id}</p>
                           <p className="text-xs text-muted-foreground">
-                            {conv.project} - {conv.chunks} chunks
+                            Project: {conv.project} • {conv.chunks} chunks
                           </p>
                         </div>
-                        <span className="text-xs text-muted-foreground">
+                        <span className="text-xs text-muted-foreground whitespace-nowrap">
                           {formatRelativeTime(conv.imported_at)}
                         </span>
                       </div>
@@ -596,11 +601,12 @@ export function BatchJobs() {
               </div>
 
               {/* Summary & Submit */}
-              <div className="flex items-center justify-between pt-4 border-t">
-                <div className="text-sm text-muted-foreground">
-                  {selectedConversations.length} conversations selected
+              <div className="flex items-center justify-between pt-4 border-t border-border">
+                <div className="text-sm">
+                  <span className="text-foreground font-medium">{selectedConversations.length}</span>
+                  <span className="text-muted-foreground"> conversations selected</span>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex gap-3">
                   <Button variant="outline" onClick={() => setShowCreateModal(false)}>
                     Cancel
                   </Button>
@@ -613,78 +619,78 @@ export function BatchJobs() {
                     ) : (
                       <Play className="h-4 w-4 mr-2" />
                     )}
-                    Create Job
+                    Create Job ({selectedConversations.length})
                   </Button>
                 </div>
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
         </div>
       )}
 
       {/* Job Details Modal */}
       {selectedJob && (
         <div
-          className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50"
+          className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50"
           onClick={() => setSelectedJob(null)}
         >
-          <Card
-            className="max-w-3xl w-full max-h-[80vh] overflow-auto"
+          <div
+            className="bg-background border border-border rounded-lg shadow-2xl max-w-3xl w-full max-h-[80vh] overflow-auto"
             onClick={(e: React.MouseEvent) => e.stopPropagation()}
           >
-            <CardHeader>
+            <div className="p-6 border-b border-border">
               <div className="flex items-start justify-between">
                 <div>
-                  <CardTitle className="font-mono">{selectedJob.id}</CardTitle>
-                  <CardDescription className="mt-2 flex items-center gap-2">
+                  <h2 className="text-lg font-mono text-foreground">{selectedJob.id}</h2>
+                  <div className="mt-2 flex items-center gap-2">
                     {getStatusBadge(selectedJob.status)}
                     {selectedJob.model && <Badge variant="outline">{selectedJob.model}</Badge>}
-                  </CardDescription>
+                  </div>
                 </div>
                 <Button variant="ghost" size="icon" onClick={() => setSelectedJob(null)}>
                   <X className="h-4 w-4" />
                 </Button>
               </div>
-            </CardHeader>
-            <CardContent className="space-y-6">
+            </div>
+            <div className="p-6 space-y-6">
               {/* Timestamps */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <h3 className="text-sm font-medium text-muted-foreground">Created</h3>
-                  <p className="mt-1 text-sm">{new Date(selectedJob.created_at).toLocaleString()}</p>
+                  <p className="mt-1 text-sm text-foreground">{new Date(selectedJob.created_at).toLocaleString()}</p>
                 </div>
                 {selectedJob.completed_at && (
                   <div>
                     <h3 className="text-sm font-medium text-muted-foreground">Completed</h3>
-                    <p className="mt-1 text-sm">{new Date(selectedJob.completed_at).toLocaleString()}</p>
+                    <p className="mt-1 text-sm text-foreground">{new Date(selectedJob.completed_at).toLocaleString()}</p>
                   </div>
                 )}
               </div>
 
               {/* Progress */}
               <div>
-                <h3 className="text-sm font-medium text-muted-foreground">Progress</h3>
-                <div className="mt-2 flex items-center gap-2">
-                  <div className="flex-1 h-3 bg-secondary rounded-full overflow-hidden">
+                <h3 className="text-sm font-medium text-muted-foreground mb-2">Progress</h3>
+                <div className="flex items-center gap-3">
+                  <div className="flex-1 h-3 bg-muted rounded-full overflow-hidden">
                     <div
                       className="h-full bg-primary transition-all"
                       style={{ width: `${selectedJob.progress || 0}%` }}
                     />
                   </div>
-                  <span className="text-sm font-medium">{selectedJob.progress || 0}%</span>
+                  <span className="text-sm font-semibold text-foreground">{selectedJob.progress || 0}%</span>
                 </div>
-                <div className="mt-2 grid grid-cols-3 gap-4 text-sm">
-                  <div>
-                    <p className="text-muted-foreground">Total</p>
-                    <p className="font-medium">{selectedJob.conversations_count}</p>
+                <div className="mt-4 grid grid-cols-3 gap-4">
+                  <div className="bg-card p-3 rounded-lg border border-border">
+                    <p className="text-xs text-muted-foreground">Total</p>
+                    <p className="text-lg font-semibold text-foreground">{selectedJob.conversations_count}</p>
                   </div>
-                  <div>
-                    <p className="text-muted-foreground">Completed</p>
-                    <p className="font-medium text-green-600">{selectedJob.completed_count}</p>
+                  <div className="bg-card p-3 rounded-lg border border-border">
+                    <p className="text-xs text-muted-foreground">Completed</p>
+                    <p className="text-lg font-semibold text-green-500">{selectedJob.completed_count}</p>
                   </div>
-                  <div>
-                    <p className="text-muted-foreground">Failed</p>
-                    <p className="font-medium text-red-600">{selectedJob.failed_count}</p>
+                  <div className="bg-card p-3 rounded-lg border border-border">
+                    <p className="text-xs text-muted-foreground">Failed</p>
+                    <p className="text-lg font-semibold text-red-500">{selectedJob.failed_count}</p>
                   </div>
                 </div>
               </div>
@@ -692,9 +698,9 @@ export function BatchJobs() {
               {/* Error */}
               {selectedJob.error && (
                 <div>
-                  <h3 className="text-sm font-medium text-destructive mb-2">Error</h3>
-                  <div className="bg-destructive/10 border border-destructive/20 p-3 rounded-lg">
-                    <p className="text-sm text-destructive">{selectedJob.error}</p>
+                  <h3 className="text-sm font-medium text-red-500 mb-2">Error</h3>
+                  <div className="bg-red-500/10 border border-red-500/30 p-4 rounded-lg">
+                    <p className="text-sm text-red-400">{selectedJob.error}</p>
                   </div>
                 </div>
               )}
@@ -702,20 +708,20 @@ export function BatchJobs() {
               {/* Duration */}
               <div>
                 <h3 className="text-sm font-medium text-muted-foreground">Duration</h3>
-                <p className="mt-1 text-sm">{calculateDuration(selectedJob)}</p>
+                <p className="mt-1 text-sm text-foreground">{calculateDuration(selectedJob)}</p>
               </div>
 
               {/* Actions */}
               {selectedJob.status === 'completed' && (
-                <div className="pt-4 border-t">
+                <div className="pt-4 border-t border-border">
                   <Button onClick={() => processResults(selectedJob.id)} className="w-full">
                     <Download className="h-4 w-4 mr-2" />
                     Process Results & Store Narratives
                   </Button>
                 </div>
               )}
-            </CardContent>
-          </Card>
+            </div>
+          </div>
         </div>
       )}
     </div>

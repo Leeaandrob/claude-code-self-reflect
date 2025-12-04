@@ -94,6 +94,42 @@ services:
       timeout: 10s
       retries: 3
 
+  # Narrative Worker - Automatic narrative generation
+  # Monitors conversations and generates structured narratives using DashScope Batch API
+  narrative-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.narrative-worker
+    container_name: claude-reflection-narrative-worker
+    depends_on:
+      - qdrant
+    volumes:
+      - ${CONFIG_PATH:-${HOME}/.claude-self-reflect/config}:/config
+      - ${CLAUDE_LOGS_PATH:-${HOME}/.claude/projects}:/logs:ro
+    environment:
+      - QDRANT_URL=http://qdrant:6333
+      - CONFIG_PATH=/config
+      - STATE_FILE=/config/unified-state.json
+      - DASHSCOPE_API_KEY=${DASHSCOPE_API_KEY:-}
+      - DASHSCOPE_BASE_URL=${DASHSCOPE_ENDPOINT:-https://dashscope-intl.aliyuncs.com/compatible-mode/v1}
+      # Narrative worker specific config
+      - NARRATIVE_BATCH_SIZE=${NARRATIVE_BATCH_SIZE:-50}
+      - NARRATIVE_CHECK_INTERVAL=${NARRATIVE_CHECK_INTERVAL:-300}
+      - NARRATIVE_POLL_INTERVAL=${NARRATIVE_POLL_INTERVAL:-60}
+      - NARRATIVE_MIN_BATCH=${NARRATIVE_MIN_BATCH:-5}
+      - NARRATIVE_MAX_CONCURRENT=${NARRATIVE_MAX_CONCURRENT:-3}
+      - NARRATIVE_MODEL=${NARRATIVE_MODEL:-qwen-plus}
+      - NARRATIVE_COOLDOWN=${NARRATIVE_COOLDOWN:-10}
+      - PYTHONUNBUFFERED=1
+    restart: unless-stopped
+    profiles: ["admin", "narratives"]
+    mem_limit: 512m
+    healthcheck:
+      test: ["CMD", "pgrep", "-f", "narrative_worker"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+
   # ============================================================================
   # LEGACY SERVICES (Deprecated - use worker-agent/docker-compose.yaml instead)
   # ============================================================================

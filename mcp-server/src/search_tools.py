@@ -970,5 +970,6 @@ def register_search_tools(
     ) -> str:
         """Get additional search results after an initial search (pagination support)."""
         return await tools.get_next_results(ctx, query, offset, limit, min_score, project)
-    
+
     logger.info("Search tools registered successfully")
+    return tools  # Return SearchTools instance for use by other modules

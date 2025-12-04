@@ -712,7 +712,7 @@ from qdrant_client import QdrantClient as SyncQdrantClient
 sync_qdrant_client = SyncQdrantClient(url=QDRANT_URL)
 project_resolver = ProjectResolver(sync_qdrant_client)
 
-register_search_tools(
+search_tools = register_search_tools(
     mcp,
     qdrant_client,
     QDRANT_URL,
@@ -726,6 +726,7 @@ register_search_tools(
     decay_manager,
     project_resolver  # Pass the resolver
 )
+logger.info("Search tools registered")
 
 # Register reflection tools
 register_reflection_tools(

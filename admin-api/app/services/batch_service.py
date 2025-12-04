@@ -12,10 +12,24 @@ from typing import Optional, List, Dict, Any
 
 logger = logging.getLogger(__name__)
 
-CSR_HOME = Path.home() / '.claude-self-reflect'
-BATCH_STATE_DIR = CSR_HOME / 'batch_state'
-BATCH_FILES_DIR = CSR_HOME / 'batch_files'
-UNIFIED_STATE_FILE = CSR_HOME / 'config' / 'unified-state.json'
+# In Docker, config is mounted at /config
+# Outside Docker, use ~/.claude-self-reflect/config
+CONFIG_PATH = Path(os.getenv('CONFIG_PATH', '/config'))
+if not CONFIG_PATH.exists():
+    CONFIG_PATH = Path.home() / '.claude-self-reflect' / 'config'
+
+# Batch state directories - use /tmp in Docker, home dir outside
+if Path('/config').exists():
+    # Running in Docker
+    BATCH_STATE_DIR = Path('/tmp/batch_state')
+    BATCH_FILES_DIR = Path('/tmp/batch_files')
+else:
+    # Running outside Docker
+    CSR_HOME = Path.home() / '.claude-self-reflect'
+    BATCH_STATE_DIR = CSR_HOME / 'batch_state'
+    BATCH_FILES_DIR = CSR_HOME / 'batch_files'
+
+UNIFIED_STATE_FILE = CONFIG_PATH / 'unified-state.json'
 
 # DashScope configuration
 DASHSCOPE_API_KEY = os.getenv('DASHSCOPE_API_KEY', '')
@@ -206,13 +220,16 @@ class BatchService:
         files_data = state.get('files', {})
 
         # Build conversation map
+        # Note: In unified-state.json, the KEY is the file path (not a hash)
+        # and the VALUE contains metadata (chunks, status, etc)
         conversation_map = {}
-        for file_hash, file_info in files_data.items():
-            file_path = file_info.get('path', '')
-            if file_path:
-                # Extract conversation ID from path
-                conv_id = Path(file_path).stem
-                conversation_map[conv_id] = file_path
+        for file_path, file_info in files_data.items():
+            # Skip non-completed files
+            if file_info.get('status') != 'completed':
+                continue
+            # Extract conversation ID from path (the UUID)
+            conv_id = Path(file_path).stem
+            conversation_map[conv_id] = file_path
 
         # Prepare batch requests
         requests = []
@@ -466,29 +483,36 @@ class BatchService:
         files_data = state.get('files', {})
         conversations = []
 
-        for file_hash, file_info in files_data.items():
+        for file_path_key, file_info in files_data.items():
             # Skip if already has narrative
             if file_info.get('has_narrative'):
-                continue
-
-            # Filter by project if specified
-            file_project = file_info.get('project', '')
-            if project and file_project != project:
                 continue
 
             # Skip non-completed files
             if file_info.get('status') != 'completed':
                 continue
 
-            file_path = file_info.get('path', '')
-            if file_path and Path(file_path).exists():
-                conversations.append({
-                    "id": Path(file_path).stem,
-                    "path": file_path,
-                    "project": file_project,
-                    "chunks": file_info.get('chunks', 0),
-                    "imported_at": file_info.get('imported_at', '')
-                })
+            # Extract project from collection name (conv_{hash}_qwen_1024d)
+            collection = file_info.get('collection', '')
+            file_project = collection.split('_')[1] if collection.startswith('conv_') else ''
+
+            # Filter by project if specified
+            if project and file_project != project:
+                continue
+
+            # The key is the file path (Docker format: /logs/...)
+            # Convert to conversation ID from the filename
+            file_path = Path(file_path_key)
+            conv_id = file_path.stem  # UUID without .jsonl
+
+            conversations.append({
+                "id": conv_id,
+                "path": file_path_key,
+                "project": file_project,
+                "collection": collection,
+                "chunks": file_info.get('chunks', 0),
+                "imported_at": file_info.get('imported_at', '')
+            })
 
         # Sort by import date (newest first)
         conversations.sort(key=lambda x: x['imported_at'], reverse=True)
