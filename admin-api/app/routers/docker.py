@@ -3,13 +3,31 @@ from fastapi import APIRouter, HTTPException
 import subprocess
 import json
 import logging
+import shutil
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
+
+def is_docker_available() -> bool:
+    """Check if docker CLI is available."""
+    return shutil.which('docker') is not None
+
+
 @router.get("/services")
 async def list_docker_services():
     """List Docker Compose services status."""
+    # Check if docker is available
+    if not is_docker_available():
+        return {
+            "services": [],
+            "total": 0,
+            "running": 0,
+            "stopped": 0,
+            "error": "Docker CLI not available. The admin-api is running inside a container without Docker access.",
+            "hint": "To enable Docker management, mount the Docker socket: -v /var/run/docker.sock:/var/run/docker.sock"
+        }
+
     try:
         result = subprocess.run(
             ['docker', 'compose', 'ps', '--format', 'json'],
@@ -69,23 +87,42 @@ async def list_docker_services():
 @router.post("/services/{service_name}/start")
 async def start_service(service_name: str):
     """Start a Docker Compose service."""
+    if not is_docker_available():
+        raise HTTPException(
+            status_code=503,
+            detail="Docker CLI not available. Cannot start services."
+        )
     try:
         subprocess.run(
             ['docker', 'compose', 'start', service_name],
+            capture_output=True,
+            text=True,
             check=True
         )
         return {"message": f"Service {service_name} started"}
+    except subprocess.CalledProcessError as e:
+        raise HTTPException(status_code=500, detail=e.stderr or str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @router.post("/services/{service_name}/stop")
 async def stop_service(service_name: str):
     """Stop a Docker Compose service."""
+    if not is_docker_available():
+        raise HTTPException(
+            status_code=503,
+            detail="Docker CLI not available. Cannot stop services."
+        )
     try:
         subprocess.run(
             ['docker', 'compose', 'stop', service_name],
+            capture_output=True,
+            text=True,
             check=True
         )
         return {"message": f"Service {service_name} stopped"}
+    except subprocess.CalledProcessError as e:
+        raise HTTPException(status_code=500, detail=e.stderr or str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

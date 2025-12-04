@@ -12,9 +12,8 @@ import re
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-CSR_HOME = Path.home() / '.claude-self-reflect'
-CONFIG_DIR = CSR_HOME / 'config'
-UNIFIED_STATE_FILE = CONFIG_DIR / 'unified-state.json'
+# Use STATE_FILE env var (set by docker-compose) or fallback to default
+UNIFIED_STATE_FILE = Path(os.getenv('STATE_FILE', str(Path.home() / '.claude-self-reflect' / 'config' / 'unified-state.json')))
 QDRANT_URL = os.getenv('QDRANT_URL', 'http://localhost:6333')
 
 async def load_unified_state() -> Dict[str, Any]:

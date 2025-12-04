@@ -1,0 +1,115 @@
+# Claude Self-Reflect Worker Stack
+# This compose file runs the complete worker stack on a machine
+#
+# Usage:
+#   docker compose up -d
+#
+# Or with custom admin URL:
+#   ADMIN_API_URL=http://admin-server:8000/api docker compose up -d
+
+volumes:
+  qdrant_data:
+  config_data:
+
+services:
+  # Worker Agent - monitors and manages local services
+  worker-agent:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: claude-reflect-worker-agent
+    restart: unless-stopped
+    depends_on:
+      - qdrant
+    ports:
+      - "${AGENT_PORT:-8081}:8081"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - config_data:/config:ro
+      - ${CLAUDE_LOGS_PATH:-${HOME}/.claude/projects}:/logs:ro
+      - /etc/localtime:/etc/localtime:ro
+    environment:
+      - ADMIN_API_URL=${ADMIN_API_URL:-http://localhost:8000/api}
+      - HEARTBEAT_INTERVAL=${HEARTBEAT_INTERVAL:-30}
+      - QDRANT_URL=http://qdrant:6333
+      - STATE_FILE=/config/unified-state.json
+      - LOGS_DIR=/logs
+      - AGENT_PORT=8081
+      - VOYAGE_KEY=${VOYAGE_KEY:-}
+      - DASHSCOPE_API_KEY=${DASHSCOPE_API_KEY:-}
+    command: >
+      --api-url ${ADMIN_API_URL:-http://localhost:8000/api}
+      --qdrant-url http://qdrant:6333
+      --state-file /config/unified-state.json
+      --local-port 8081
+      --interval ${HEARTBEAT_INTERVAL:-30}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:8081/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Qdrant vector database
+  qdrant:
+    image: qdrant/qdrant:v1.15.1
+    container_name: claude-reflect-qdrant
+    restart: unless-stopped
+    ports:
+      - "${QDRANT_PORT:-6333}:6333"
+    volumes:
+      - qdrant_data:/qdrant/storage
+    environment:
+      - QDRANT__LOG_LEVEL=INFO
+      - QDRANT__SERVICE__HTTP_PORT=6333
+    mem_limit: ${QDRANT_MEMORY:-4g}
+    memswap_limit: ${QDRANT_MEMORY:-4g}
+
+  # Safe watcher - continuous import service
+  safe-watcher:
+    image: ghcr.io/leeaandrob/claude-self-reflect-watcher:latest
+    build:
+      context: ..
+      dockerfile: Dockerfile.safe-watcher
+    container_name: claude-reflect-watcher
+    restart: unless-stopped
+    depends_on:
+      - qdrant
+    volumes:
+      - ${CLAUDE_LOGS_PATH:-${HOME}/.claude/projects}:/logs:ro
+      - config_data:/config
+    environment:
+      - QDRANT_URL=http://qdrant:6333
+      - STATE_FILE=/config/unified-state.json
+      - LOGS_DIR=/logs
+      - VOYAGE_KEY=${VOYAGE_KEY:-}
+      - DASHSCOPE_API_KEY=${DASHSCOPE_API_KEY:-}
+      - DASHSCOPE_ENDPOINT=${DASHSCOPE_ENDPOINT:-https://dashscope-intl.aliyuncs.com/compatible-mode/v1}
+      - EMBEDDING_PROVIDER=${EMBEDDING_PROVIDER:-cloud}
+      - PYTHONUNBUFFERED=1
+    profiles: ["full"]
+    mem_limit: 2g
+
+  # MCP server (optional - only if running MCP via Docker)
+  mcp-server:
+    image: ghcr.io/leeaandrob/claude-self-reflect-mcp:latest
+    build:
+      context: ..
+      dockerfile: Dockerfile.mcp-server
+    container_name: claude-reflect-mcp
+    restart: unless-stopped
+    depends_on:
+      - qdrant
+    environment:
+      - QDRANT_URL=http://qdrant:6333
+      - VOYAGE_KEY=${VOYAGE_KEY:-}
+      - DASHSCOPE_API_KEY=${DASHSCOPE_API_KEY:-}
+      - DASHSCOPE_ENDPOINT=${DASHSCOPE_ENDPOINT:-https://dashscope-intl.aliyuncs.com/compatible-mode/v1}
+      - EMBEDDING_PROVIDER=${EMBEDDING_PROVIDER:-cloud}
+      - PYTHONUNBUFFERED=1
+    stdin_open: true
+    tty: true
+    profiles: ["mcp"]
+
+networks:
+  default:
+    name: claude-reflect-worker-network

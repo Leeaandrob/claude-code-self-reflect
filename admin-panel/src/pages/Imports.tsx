@@ -9,7 +9,8 @@ interface ImportStatus {
   total_files: number
   imported_files: number
   total_messages: number
-  progress: number
+  import_progress: number
+  total_size_mb?: number
 }
 
 interface ImportedFile {
@@ -57,7 +58,10 @@ export function Imports() {
         }
 
         // Extract unique projects from projects list
-        const projectNames = projectsData?.projects?.map((p: any) => p.name) || []
+        // API returns array directly, not { projects: [...] }
+        const projectNames = Array.isArray(projectsData)
+          ? projectsData.map((p: any) => p.name)
+          : []
         setProjects(projectNames)
       } catch (err) {
         console.error('Failed to load imports data:', err)
@@ -168,13 +172,13 @@ export function Imports() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {status?.progress?.toFixed(1) || 0}%
+              {status?.import_progress?.toFixed(1) || 0}%
             </div>
             <div className="mt-2">
               <div className="h-2 w-full bg-secondary rounded-full overflow-hidden">
                 <div
                   className="h-full bg-primary transition-all duration-300"
-                  style={{ width: `${status?.progress || 0}%` }}
+                  style={{ width: `${status?.import_progress || 0}%` }}
                 />
               </div>
             </div>

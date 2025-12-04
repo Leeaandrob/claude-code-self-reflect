@@ -13,6 +13,7 @@ export interface ImportStats {
   pending_files: number
   total_messages: number
   import_progress: number
+  total_size_mb?: number
 }
 
 export interface FileImportStatus {
@@ -67,7 +68,7 @@ export interface SystemMetrics {
     total_vectors: number
   }
   embedding: {
-    mode: 'local' | 'cloud'
+    mode: 'voyage' | 'qwen' | 'cloud'  // v8.0.0+ cloud-only modes
     model: string
     dimension: number
   }
@@ -77,6 +78,8 @@ export interface SystemMetrics {
     total: number
     percentage: number
   }
+  projects_count?: number
+  timestamp?: string
 }
 
 export interface LogEntry {
@@ -90,12 +93,14 @@ export interface EmbeddingModeConfig {
   model: string
   dimension: number
   api_key_set?: boolean
+  provider?: string
+  endpoint?: string
 }
 
 export interface EmbeddingConfig {
-  mode: 'local' | 'cloud' | 'voyage' | 'qwen'
-  local?: EmbeddingModeConfig
-  cloud?: EmbeddingModeConfig & { provider?: string }
+  mode: 'voyage' | 'qwen' | 'cloud'  // 'cloud' means unconfigured (v8.0.0+)
   voyage?: EmbeddingModeConfig
   qwen?: EmbeddingModeConfig
+  cloud_only?: boolean
+  version?: string
 }

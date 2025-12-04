@@ -5,6 +5,120 @@ All notable changes to Claude Self-Reflect will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [9.0.0] - 2025-12-04
+
+### 🎯 MAJOR: Distributed Worker Architecture
+
+**Multi-Machine Monitoring** • **Centralized Admin Panel** • **Remote Service Control**
+
+v9.0.0 introduces a distributed architecture with Worker Agents that run on each machine, reporting status to a central Admin Panel. This enables monitoring and controlling Claude Self-Reflect across multiple computers from a single dashboard.
+
+### NEW: Worker Agent System
+
+#### Architecture Overview
+```
+┌─────────────────────────────────────────────────────────────┐
+│                   Central Admin Server                       │
+│  ┌─────────┐  ┌─────────────┐  ┌─────────────────────────┐  │
+│  │ Qdrant  │  │  Admin API  │  │     Admin Panel UI      │  │
+│  │(Vectors)│  │  (FastAPI)  │  │       (React)           │  │
+│  └─────────┘  └─────────────┘  └─────────────────────────┘  │
+│                      ▲                                       │
+└──────────────────────┼───────────────────────────────────────┘
+                       │ Heartbeats + Commands
+       ┌───────────────┼───────────────┐
+       │               │               │
+       ▼               ▼               ▼
+  ┌─────────┐    ┌─────────┐    ┌─────────┐
+  │Worker 1 │    │Worker 2 │    │Worker 3 │
+  │(Machine)│    │(Machine)│    │(Machine)│
+  └─────────┘    └─────────┘    └─────────┘
+```
+
+#### Worker Agent Features
+- **Docker-based**: Runs as a container with Docker CLI to manage sibling containers
+- **Heartbeat System**: Reports status every 30 seconds to central API
+- **Local API Server**: Exposes HTTP API on port 8081 for remote commands
+- **Service Control**: Start/stop/restart Docker services remotely from Admin Panel
+- **System Metrics**: CPU, memory, disk usage monitoring
+- **Import Stats**: Tracks files imported and messages processed
+- **Qdrant Status**: Reports vector count and collection health
+
+#### Installation
+```bash
+# On each machine, run the one-line installer:
+curl -fsSL https://raw.githubusercontent.com/ramakay/claude-self-reflect/main/worker-agent/install.sh | bash
+
+# Or manually with Docker:
+cd worker-agent
+docker compose up -d
+```
+
+### Added
+
+#### New Directory: worker-agent/
+- `agent.py` - Worker agent v2.0.0 with FastAPI + heartbeat loop
+- `Dockerfile` - Docker image with Docker CLI for container management
+- `docker-compose.yaml` - Standalone worker stack (qdrant + safe-watcher + agent)
+- `install.sh` - One-line installation script with systemd support
+- `requirements.txt` - Python dependencies (FastAPI, uvicorn, httpx, psutil)
+- `README.md` - Complete documentation
+
+#### Admin Panel Enhancements
+- **Workers Page**: New page to monitor all connected workers
+- **Service Control**: Start/stop services on remote workers from UI
+- **System Metrics**: View CPU, memory, Qdrant stats per worker
+- **Online/Offline Status**: Real-time worker availability tracking
+
+#### Admin API Endpoints
+- `POST /api/workers/heartbeat` - Receive worker heartbeats
+- `GET /api/workers/` - List all registered workers with summary
+- `GET /api/workers/{id}` - Get specific worker details
+- `DELETE /api/workers/{id}` - Remove worker from registry
+- `POST /api/workers/{id}/services/{name}/start` - Start service on worker
+- `POST /api/workers/{id}/services/{name}/stop` - Stop service on worker
+- `POST /api/workers/{id}/services/{name}/restart` - Restart service on worker
+- `GET /api/workers/{id}/services/{name}/logs` - Get service logs from worker
+
+### Changed
+
+#### Docker Compose Restructured
+- **Admin Profile**: `docker compose --profile admin up -d` for central server
+- **Legacy Services Deprecated**: safe-watch, mcp, init-permissions marked as legacy
+- **Worker-Agent Recommended**: Use worker-agent/docker-compose.yaml on each machine
+
+#### Service Organization
+| Profile | Services | Purpose |
+|---------|----------|---------|
+| **admin** | qdrant, admin-api, admin | Central monitoring dashboard |
+| **legacy** | safe-watcher, mcp-server, init-permissions | Deprecated, use worker-agent |
+
+### Migration Guide
+
+#### For Existing Single-Machine Users
+No changes required. Continue using:
+```bash
+docker compose --profile safe-watch up -d
+```
+
+#### For Multi-Machine Deployments
+1. **Central Server** - Run Admin Panel:
+   ```bash
+   docker compose --profile admin up -d
+   ```
+
+2. **Each Worker Machine** - Install Worker Agent:
+   ```bash
+   curl -fsSL https://raw.githubusercontent.com/ramakay/claude-self-reflect/main/worker-agent/install.sh | bash
+   ```
+
+3. **Configure Workers** - Edit worker-agent/.env:
+   ```bash
+   ADMIN_API_URL=http://your-central-server:8000
+   ```
+
+4. **Monitor** - Access Admin Panel at http://central-server:3000/workers
+
 ## [8.0.0] - 2025-12-04
 
 ### 🎯 MAJOR: Cloud-Only Architecture

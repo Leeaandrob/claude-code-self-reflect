@@ -6,6 +6,7 @@ import { Imports } from './pages/Imports'
 import { Collections } from './pages/Collections'
 import { Settings } from './pages/Settings'
 import { Docker } from './pages/Docker'
+import { Workers } from './pages/Workers'
 import { Logs } from './pages/Logs'
 import { BatchJobs } from './pages/BatchJobs'
 import { ToastProvider } from './components/ui/toast'
@@ -22,6 +23,7 @@ function App() {
             <Route path="/collections" element={<Collections />} />
             <Route path="/settings" element={<Settings />} />
             <Route path="/docker" element={<Docker />} />
+            <Route path="/workers" element={<Workers />} />
             <Route path="/logs" element={<Logs />} />
             <Route path="/batch" element={<BatchJobs />} />
           </Routes>

@@ -9,10 +9,11 @@ from qdrant_client import AsyncQdrantClient
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-CSR_HOME = Path.home() / '.claude-self-reflect'
-UNIFIED_STATE_FILE = CSR_HOME / 'config' / 'unified-state.json'
+# Use STATE_FILE env var (set by docker-compose) or fallback to default
+UNIFIED_STATE_FILE = Path(os.getenv('STATE_FILE', str(Path.home() / '.claude-self-reflect' / 'config' / 'unified-state.json')))
 QDRANT_URL = os.getenv('QDRANT_URL', 'http://localhost:6333')
-CLAUDE_LOGS_PATH = Path(os.getenv('CLAUDE_LOGS_PATH', Path.home() / '.claude' / 'projects'))
+# Use LOGS_DIR env var (set by docker-compose) or fallback to default
+CLAUDE_LOGS_PATH = Path(os.getenv('LOGS_DIR', os.getenv('CLAUDE_LOGS_PATH', str(Path.home() / '.claude' / 'projects'))))
 
 @router.get("/status")
 async def get_import_status():
@@ -52,7 +53,7 @@ async def get_import_status():
             "imported_files": imported_files,
             "pending_files": total_files - imported_files,
             "total_messages": imported_messages,
-            "progress": round(progress, 2),
+            "import_progress": round(progress, 2),  # Use same name as dashboard/metrics
             "total_size_mb": round(total_files_size / (1024 * 1024), 2)
         }
 

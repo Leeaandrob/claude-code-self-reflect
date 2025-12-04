@@ -1,16 +1,30 @@
+# Claude Self-Reflect Docker Compose
+#
+# ARCHITECTURE (v9.0.0):
+# - Admin Panel: Central monitoring dashboard for all workers
+# - Worker Agent: Runs on each machine, reports status to admin
+#
+# RECOMMENDED SETUP:
+# 1. Run Admin Panel on a central server:
+#    docker compose --profile admin up -d
+#
+# 2. Install Worker Agent on each machine:
+#    See worker-agent/README.md or run:
+#    cd worker-agent && docker compose up -d
+#
+# LEGACY PROFILES (deprecated - use worker-agent instead):
+# - safe-watch: Direct watcher service (replaced by worker-agent)
+# - mcp: MCP server via Docker (usually run via Claude Desktop)
+
 volumes:
   qdrant_data:
 
 services:
-  # Fix permissions for config directory (UID 1000 matches local user)
-  init-permissions:
-    image: alpine
-    command: sh -c "chown -R 1000:1000 /config"
-    volumes:
-      - ${CONFIG_PATH:-${HOME}/.claude-self-reflect/config}:/config
-    profiles: ["safe-watch"]
+  # ============================================================================
+  # ADMIN PANEL SERVICES (Central Server)
+  # ============================================================================
 
-  # Qdrant vector database - the heart of semantic search
+  # Qdrant vector database - required for admin dashboard stats
   qdrant:
     image: qdrant/qdrant:v1.15.1
     container_name: claude-reflection-qdrant
@@ -26,7 +40,75 @@ services:
     mem_limit: ${QDRANT_MEMORY:-4g}
     memswap_limit: ${QDRANT_MEMORY:-4g}
 
-  # Safe watcher with hot/warm/cold priority - MAIN IMPORT SERVICE
+  # Admin API - FastAPI backend for admin panel
+  admin-api:
+    build:
+      context: .
+      dockerfile: Dockerfile.admin-api
+    container_name: claude-reflection-admin-api
+    depends_on:
+      - qdrant
+    volumes:
+      - ${CONFIG_PATH:-${HOME}/.claude-self-reflect/config}:/config:ro
+      - ${CLAUDE_LOGS_PATH:-${HOME}/.claude/projects}:/logs:ro
+    environment:
+      - QDRANT_URL=http://qdrant:6333
+      - CONFIG_PATH=/config
+      - LOGS_DIR=/logs
+      - STATE_FILE=/config/unified-state.json
+      - VOYAGE_KEY=${VOYAGE_KEY:-}
+      - DASHSCOPE_API_KEY=${DASHSCOPE_API_KEY:-}
+      - DASHSCOPE_ENDPOINT=${DASHSCOPE_ENDPOINT:-https://dashscope-intl.aliyuncs.com/compatible-mode/v1}
+      - EMBEDDING_PROVIDER=${EMBEDDING_PROVIDER:-cloud}
+      - PYTHONUNBUFFERED=1
+    restart: unless-stopped
+    profiles: ["admin"]
+    mem_limit: 512m
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Admin Panel - React frontend served by Nginx
+  admin:
+    build:
+      context: .
+      dockerfile: Dockerfile.admin
+    container_name: claude-reflection-admin
+    depends_on:
+      - admin-api
+      - qdrant
+    ports:
+      - "${ADMIN_PORT:-3000}:80"
+    environment:
+      - API_URL=http://admin-api:8000
+      - QDRANT_URL=http://qdrant:6333
+      - APP_VERSION=${npm_package_version:-1.0.0}
+      - NODE_ENV=production
+    restart: unless-stopped
+    profiles: ["admin"]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ============================================================================
+  # LEGACY SERVICES (Deprecated - use worker-agent/docker-compose.yaml instead)
+  # ============================================================================
+
+  # Fix permissions for config directory (UID 1000 matches local user)
+  # DEPRECATED: Use worker-agent which handles this automatically
+  init-permissions:
+    image: alpine
+    command: sh -c "chown -R 1000:1000 /config"
+    volumes:
+      - ${CONFIG_PATH:-${HOME}/.claude-self-reflect/config}:/config
+    profiles: ["safe-watch", "legacy"]
+
+  # Safe watcher with hot/warm/cold priority
+  # DEPRECATED: Use worker-agent/docker-compose.yaml which includes this service
   safe-watcher:
     build:
       context: .
@@ -66,12 +148,13 @@ services:
       - PYTHONUNBUFFERED=1
       - MALLOC_ARENA_MAX=2
     restart: unless-stopped
-    profiles: ["safe-watch", "watch"]
+    profiles: ["safe-watch", "watch", "legacy"]
     mem_limit: 2g
     memswap_limit: 2g
     cpus: 2.0
 
   # MCP server for Claude integration
+  # DEPRECATED: Usually run via Claude Desktop, not Docker
   mcp-server:
     build:
       context: .
@@ -92,47 +175,7 @@ services:
     restart: unless-stopped
     stdin_open: true
     tty: true
-    profiles: ["mcp"]
-
-  # Admin API - FastAPI backend for admin panel
-  admin-api:
-    build:
-      context: .
-      dockerfile: Dockerfile.admin-api
-    container_name: claude-reflection-admin-api
-    depends_on:
-      - qdrant
-    volumes:
-      - ${CONFIG_PATH:-${HOME}/.claude-self-reflect/config}:/config:ro
-      - ${CLAUDE_LOGS_PATH:-${HOME}/.claude/projects}:/logs:ro
-    environment:
-      - QDRANT_URL=http://qdrant:6333
-      - CONFIG_PATH=/config
-      - LOGS_DIR=/logs
-      - STATE_FILE=/config/unified-state.json
-      - PYTHONUNBUFFERED=1
-    restart: unless-stopped
-    profiles: ["admin"]
-    mem_limit: 512m
-
-  # Admin Panel - React frontend served by Nginx
-  admin:
-    build:
-      context: .
-      dockerfile: Dockerfile.admin
-    container_name: claude-reflection-admin
-    depends_on:
-      - admin-api
-      - qdrant
-    ports:
-      - "${ADMIN_PORT:-3000}:80"
-    environment:
-      - API_URL=http://admin-api:8000
-      - QDRANT_URL=http://qdrant:6333
-      - APP_VERSION=${npm_package_version:-1.0.0}
-      - NODE_ENV=production
-    restart: unless-stopped
-    profiles: ["admin"]
+    profiles: ["mcp", "legacy"]
 
 networks:
   default:

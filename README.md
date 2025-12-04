@@ -35,6 +35,7 @@ Claude starts fresh every conversation. You've solved complex bugs, designed arc
 - [Real Examples](#real-examples)
 - [Key Features](#key-features)
 - [Architecture](#architecture)
+- [Multi-Machine Setup](#multi-machine-setup)
 - [Requirements](#requirements)
 - [Troubleshooting](#troubleshooting)
 - [Contributors](#contributors)
@@ -179,14 +180,70 @@ The safe-watcher service uses intelligent prioritization:
 | Service | Purpose | Profile |
 |---------|---------|---------|
 | **qdrant** | Vector database | default |
-| **safe-watcher** | Continuous import | safe-watch |
-| **mcp-server** | MCP server | mcp |
+| **admin-api** | Admin panel backend | admin |
+| **admin** | Admin panel UI | admin |
+| **safe-watcher** | Continuous import | safe-watch (legacy) |
+| **mcp-server** | MCP server | mcp (legacy) |
 
 ### Components
 - **Vector Database**: Qdrant for semantic search
 - **MCP Server**: Python-based using FastMCP
 - **Embeddings**: Cloud (Qwen/DashScope or Voyage AI)
 - **Import Pipeline**: Docker-based with HOT/WARM/COLD prioritization
+- **Worker Agent**: Remote monitoring and service control (v9.0.0+)
+
+## Multi-Machine Setup
+
+For teams or users with Claude Self-Reflect on multiple machines, v9.0.0 introduces a distributed Worker Agent architecture.
+
+### Architecture
+```
+┌─────────────────────────────────────────────────────────────┐
+│                   Central Admin Server                       │
+│  ┌─────────┐  ┌─────────────┐  ┌─────────────────────────┐  │
+│  │ Qdrant  │  │  Admin API  │  │     Admin Panel UI      │  │
+│  │(Vectors)│  │  (FastAPI)  │  │       (React)           │  │
+│  └─────────┘  └─────────────┘  └─────────────────────────┘  │
+│                      ▲                                       │
+└──────────────────────┼───────────────────────────────────────┘
+                       │ Heartbeats + Commands
+       ┌───────────────┼───────────────┐
+       │               │               │
+       ▼               ▼               ▼
+  ┌─────────┐    ┌─────────┐    ┌─────────┐
+  │Worker 1 │    │Worker 2 │    │Worker 3 │
+  │(Desktop)│    │(Laptop) │    │(Server) │
+  └─────────┘    └─────────┘    └─────────┘
+```
+
+### Setup Central Admin Server
+```bash
+# Start admin panel and Qdrant
+docker compose --profile admin up -d
+
+# Access dashboard at http://localhost:3000
+```
+
+### Install Worker Agent on Each Machine
+```bash
+# One-line installer
+curl -fsSL https://raw.githubusercontent.com/ramakay/claude-self-reflect/main/worker-agent/install.sh | bash
+
+# Or manually
+cd worker-agent
+cp .env.example .env
+# Edit .env to set ADMIN_API_URL=http://your-central-server:8000
+docker compose up -d
+```
+
+### Worker Agent Features
+- **Heartbeat Monitoring**: Workers report status every 30 seconds
+- **Remote Service Control**: Start/stop Docker services from Admin Panel
+- **System Metrics**: CPU, memory, disk usage per machine
+- **Import Stats**: Track imported files and messages
+- **Qdrant Status**: Vector count and collection health
+
+See [worker-agent/README.md](worker-agent/README.md) for detailed documentation
 
 ## Requirements
 

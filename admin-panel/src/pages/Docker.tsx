@@ -16,6 +16,15 @@ interface DockerService {
   ports?: string[]
 }
 
+interface DockerServicesResponse {
+  services: DockerService[]
+  total: number
+  running: number
+  stopped: number
+  error?: string
+  hint?: string
+}
+
 interface ServiceAction {
   serviceName: string
   action: 'start' | 'stop'
@@ -25,6 +34,7 @@ export function Docker() {
   const [services, setServices] = useState<DockerService[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [dockerUnavailable, setDockerUnavailable] = useState<{ error: string; hint?: string } | null>(null)
   const [actionInProgress, setActionInProgress] = useState<ServiceAction | null>(null)
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
 
@@ -45,8 +55,15 @@ export function Docker() {
 
   async function loadServices() {
     try {
-      const data = await api.listDockerServices()
+      const data = await api.listDockerServices() as DockerServicesResponse
       setServices(data.services || [])
+
+      // Check if Docker is unavailable (API returned error info)
+      if (data.error) {
+        setDockerUnavailable({ error: data.error, hint: data.hint })
+      } else {
+        setDockerUnavailable(null)
+      }
       setError(null)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load Docker services')
@@ -150,6 +167,25 @@ export function Docker() {
             <p className="text-sm font-medium">{toast.message}</p>
           </div>
         </div>
+      )}
+
+      {/* Docker Unavailable Notice */}
+      {dockerUnavailable && (
+        <Card className="border-yellow-500 bg-yellow-50 dark:bg-yellow-950">
+          <CardContent className="pt-6">
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 text-yellow-700 dark:text-yellow-400">
+                <AlertCircle className="h-5 w-5" />
+                <p className="font-medium">{dockerUnavailable.error}</p>
+              </div>
+              {dockerUnavailable.hint && (
+                <p className="text-sm text-yellow-600 dark:text-yellow-500 ml-7">
+                  {dockerUnavailable.hint}
+                </p>
+              )}
+            </div>
+          </CardContent>
+        </Card>
       )}
 
       {/* Error State */}

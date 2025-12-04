@@ -17,9 +17,8 @@ router = APIRouter()
 
 # Configuration
 QDRANT_URL = os.getenv('QDRANT_URL', 'http://localhost:6333')
-CSR_HOME = Path.home() / '.claude-self-reflect'
-CONFIG_DIR = CSR_HOME / 'config'
-UNIFIED_STATE_FILE = CONFIG_DIR / 'unified-state.json'
+# Use STATE_FILE env var (set by docker-compose) or fallback to default
+UNIFIED_STATE_FILE = Path(os.getenv('STATE_FILE', str(Path.home() / '.claude-self-reflect' / 'config' / 'unified-state.json')))
 
 async def get_qdrant_client():
     """Get Qdrant client instance."""
@@ -79,22 +78,21 @@ async def get_dashboard_metrics():
             total_messages = sum(f.get("message_count", 0) for f in files.values())
             projects_count = len(projects)
 
-        # Get embedding mode from environment
-        embedding_provider = os.getenv('EMBEDDING_PROVIDER', 'local').lower()
-
-        # Map provider to mode and model
-        if embedding_provider == 'qwen':
+        # Detect embedding mode based on available API keys (same logic as settings.py)
+        # Since v8.0.0, this system is cloud-only
+        if os.getenv('DASHSCOPE_API_KEY'):
             embedding_mode = "qwen"
             embedding_model = "text-embedding-v4"
             embedding_dimension = 2048
-        elif embedding_provider == 'voyage':
+        elif os.getenv('VOYAGE_KEY'):
             embedding_mode = "voyage"
-            embedding_model = os.getenv('EMBEDDING_MODEL', 'voyage-3')
+            embedding_model = "voyage-3"
             embedding_dimension = 1024
-        else:  # local
-            embedding_mode = "local"
-            embedding_model = "sentence-transformers/all-MiniLM-L6-v2"
-            embedding_dimension = 384
+        else:
+            # Cloud-only mode but no API key configured
+            embedding_mode = "cloud"
+            embedding_model = "not configured"
+            embedding_dimension = 0
 
         # Memory usage (simplified)
         import psutil

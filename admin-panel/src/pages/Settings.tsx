@@ -15,14 +15,14 @@ import {
 } from '@/components/ui/alert-dialog'
 import { api } from '@/services/api'
 import type { EmbeddingConfig } from '@/types'
-import { RefreshCw, AlertTriangle, Database, Zap } from 'lucide-react'
+import { RefreshCw, AlertTriangle, Database, Zap, Cloud } from 'lucide-react'
 
 export function Settings() {
   const [config, setConfig] = useState<EmbeddingConfig | null>(null)
   const [loading, setLoading] = useState(true)
   const [switching, setSwitching] = useState(false)
   const [showConfirmDialog, setShowConfirmDialog] = useState(false)
-  const [targetMode, setTargetMode] = useState<'local' | 'voyage' | 'qwen'>('local')
+  const [targetMode, setTargetMode] = useState<'voyage' | 'qwen'>('voyage')
   const { addToast } = useToast()
 
   useEffect(() => {
@@ -46,7 +46,7 @@ export function Settings() {
     }
   }
 
-  const handleSwitchMode = (mode: 'local' | 'voyage' | 'qwen') => {
+  const handleSwitchMode = (mode: 'voyage' | 'qwen') => {
     setTargetMode(mode)
     setShowConfirmDialog(true)
   }
@@ -100,8 +100,9 @@ export function Settings() {
   }
 
   const currentMode = config.mode
-  const currentConfig = currentMode === 'local' ? config.local : currentMode === 'voyage' ? config.voyage : currentMode === 'qwen' ? config.qwen : config.cloud
-  const defaultConfig = { model: 'unknown', dimension: 0, api_key_set: false }
+  const isConfigured = currentMode === 'voyage' || currentMode === 'qwen'
+  const currentConfig = currentMode === 'voyage' ? config.voyage : currentMode === 'qwen' ? config.qwen : null
+  const defaultConfig = { model: 'Not configured', dimension: 0, api_key_set: false }
 
   return (
     <div className="p-6 space-y-6">
@@ -110,6 +111,22 @@ export function Settings() {
         <p className="text-muted-foreground mt-2">
           Configure embedding mode and system preferences
         </p>
+      </div>
+
+      {/* Cloud-Only Notice */}
+      <div className="bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+        <div className="flex gap-3">
+          <Cloud className="h-5 w-5 text-blue-600 dark:text-blue-500 flex-shrink-0 mt-0.5" />
+          <div className="space-y-1">
+            <p className="text-sm font-medium text-blue-900 dark:text-blue-200">
+              Cloud-Only Mode (v8.0.0+)
+            </p>
+            <p className="text-sm text-blue-700 dark:text-blue-300">
+              This system uses cloud embeddings exclusively. Local embeddings have been removed for better search quality.
+              Choose between Voyage AI (1024d) or Qwen/DashScope (2048d).
+            </p>
+          </div>
+        </div>
       </div>
 
       {/* Embedding Configuration Card */}
@@ -123,47 +140,66 @@ export function Settings() {
               </CardDescription>
             </div>
             <Badge
-              variant={currentMode === 'local' ? 'success' : 'info'}
+              variant={isConfigured ? 'success' : 'destructive'}
               className="text-sm px-3 py-1"
             >
-              {currentMode.toUpperCase()}
+              {isConfigured ? currentMode.toUpperCase() : 'NOT CONFIGURED'}
             </Badge>
           </div>
         </CardHeader>
         <CardContent className="space-y-6">
           {/* Current Configuration */}
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <div className="space-y-2">
-              <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-                <Database className="h-4 w-4" />
-                Model
+          {isConfigured && currentConfig && (
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                  <Database className="h-4 w-4" />
+                  Model
+                </div>
+                <p className="text-sm font-mono bg-muted px-3 py-2 rounded-md">
+                  {currentConfig.model || defaultConfig.model}
+                </p>
               </div>
-              <p className="text-sm font-mono bg-muted px-3 py-2 rounded-md">
-                {(currentConfig ?? defaultConfig).model}
-              </p>
-            </div>
 
-            <div className="space-y-2">
-              <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-                <Zap className="h-4 w-4" />
-                Dimension
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                  <Zap className="h-4 w-4" />
+                  Dimension
+                </div>
+                <p className="text-sm font-mono bg-muted px-3 py-2 rounded-md">
+                  {currentConfig.dimension || defaultConfig.dimension}d
+                </p>
               </div>
-              <p className="text-sm font-mono bg-muted px-3 py-2 rounded-md">
-                {(currentConfig ?? defaultConfig).dimension}d
-              </p>
-            </div>
 
-            {(currentMode === 'voyage' || currentMode === 'qwen') && (
               <div className="space-y-2">
                 <div className="text-sm font-medium text-muted-foreground">
                   API Key Status
                 </div>
-                <Badge variant={(currentConfig ?? defaultConfig).api_key_set ? 'success' : 'destructive'}>
-                  {(currentConfig ?? defaultConfig).api_key_set ? 'Configured' : 'Missing'}
+                <Badge variant={currentConfig.api_key_set ? 'success' : 'destructive'}>
+                  {currentConfig.api_key_set ? 'Configured' : 'Missing'}
                 </Badge>
               </div>
-            )}
-          </div>
+            </div>
+          )}
+
+          {/* Unconfigured Warning */}
+          {!isConfigured && (
+            <div className="bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded-lg p-4">
+              <div className="flex gap-3">
+                <AlertTriangle className="h-5 w-5 text-red-600 dark:text-red-500 flex-shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  <p className="text-sm font-medium text-red-900 dark:text-red-200">
+                    No API key configured
+                  </p>
+                  <p className="text-sm text-red-700 dark:text-red-300">
+                    Set either <code className="bg-red-100 dark:bg-red-900 px-1 rounded">DASHSCOPE_API_KEY</code> for Qwen
+                    or <code className="bg-red-100 dark:bg-red-900 px-1 rounded">VOYAGE_KEY</code> for Voyage AI
+                    in your environment to enable embeddings.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Warning Banner */}
           <div className="bg-yellow-50 dark:bg-yellow-950 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
@@ -181,42 +217,8 @@ export function Settings() {
             </div>
           </div>
 
-          {/* Mode Comparison */}
-          <div className="grid gap-4 sm:grid-cols-3">
-            {/* Local Mode */}
-            <div className={`border rounded-lg p-4 ${currentMode === 'local' ? 'border-green-500 bg-green-50 dark:bg-green-950' : ''}`}>
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="font-semibold">Local</h3>
-                {currentMode === 'local' && (
-                  <Badge variant="success" className="text-xs">Current</Badge>
-                )}
-              </div>
-              <ul className="space-y-2 text-sm text-muted-foreground mb-4">
-                <li>• Privacy-first</li>
-                <li>• 384d FastEmbed</li>
-                <li>• No API key</li>
-                <li>• Lower cost</li>
-              </ul>
-              {currentMode !== 'local' && (
-                <Button
-                  onClick={() => handleSwitchMode('local')}
-                  disabled={switching}
-                  variant="outline"
-                  size="sm"
-                  className="w-full"
-                >
-                  {switching ? (
-                    <>
-                      <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                      Switching...
-                    </>
-                  ) : (
-                    'Switch'
-                  )}
-                </Button>
-              )}
-            </div>
-
+          {/* Mode Comparison - Only Voyage and Qwen */}
+          <div className="grid gap-4 sm:grid-cols-2">
             {/* Voyage Mode */}
             <div className={`border rounded-lg p-4 ${currentMode === 'voyage' ? 'border-blue-500 bg-blue-50 dark:bg-blue-950' : ''}`}>
               <div className="flex items-center justify-between mb-3">
@@ -226,10 +228,10 @@ export function Settings() {
                 )}
               </div>
               <ul className="space-y-2 text-sm text-muted-foreground mb-4">
-                <li>• Best for search</li>
-                <li>• 1024d voyage-3</li>
-                <li>• Requires API key</li>
-                <li>• Higher accuracy</li>
+                <li>• Best for semantic search</li>
+                <li>• 1024d voyage-3 model</li>
+                <li>• Requires VOYAGE_KEY</li>
+                <li>• Excellent accuracy</li>
               </ul>
               {currentMode !== 'voyage' && (
                 <Button
@@ -251,7 +253,7 @@ export function Settings() {
               )}
               {currentMode !== 'voyage' && !config.voyage?.api_key_set && (
                 <p className="text-xs text-destructive mt-2">
-                  Set VOYAGE_KEY
+                  Set VOYAGE_KEY env var
                 </p>
               )}
             </div>
@@ -259,15 +261,15 @@ export function Settings() {
             {/* Qwen Mode */}
             <div className={`border rounded-lg p-4 ${currentMode === 'qwen' ? 'border-purple-500 bg-purple-50 dark:bg-purple-950' : ''}`}>
               <div className="flex items-center justify-between mb-3">
-                <h3 className="font-semibold">Qwen (Alibaba)</h3>
+                <h3 className="font-semibold">Qwen (DashScope)</h3>
                 {currentMode === 'qwen' && (
                   <Badge variant="info" className="text-xs bg-purple-500">Current</Badge>
                 )}
               </div>
               <ul className="space-y-2 text-sm text-muted-foreground mb-4">
-                <li>• Highest quality</li>
-                <li>• 2048d text-v4</li>
-                <li>• Requires API key</li>
+                <li>• Highest quality embeddings</li>
+                <li>• 2048d text-embedding-v4</li>
+                <li>• Requires DASHSCOPE_API_KEY</li>
                 <li>• Best accuracy</li>
               </ul>
               {currentMode !== 'qwen' && (
@@ -290,7 +292,7 @@ export function Settings() {
               )}
               {currentMode !== 'qwen' && !config.qwen?.api_key_set && (
                 <p className="text-xs text-destructive mt-2">
-                  Set DASHSCOPE_API_KEY
+                  Set DASHSCOPE_API_KEY env var
                 </p>
               )}
             </div>
@@ -302,13 +304,10 @@ export function Settings() {
               <strong>Collection Naming:</strong> Collections use prefixed naming with dimension suffix
             </p>
             <p>
-              • Local: <code className="bg-muted px-1 py-0.5 rounded">csr_project_local_384d</code>
+              • Voyage: <code className="bg-muted px-1 py-0.5 rounded">conv_project_voyage_1024d</code>
             </p>
             <p>
-              • Voyage: <code className="bg-muted px-1 py-0.5 rounded">csr_project_voyage_1024d</code>
-            </p>
-            <p>
-              • Qwen: <code className="bg-muted px-1 py-0.5 rounded">csr_project_qwen_2048d</code>
+              • Qwen: <code className="bg-muted px-1 py-0.5 rounded">conv_project_qwen_2048d</code>
             </p>
           </div>
         </CardContent>
@@ -326,7 +325,7 @@ export function Settings() {
               <div className="bg-muted p-3 rounded-md space-y-2 text-sm">
                 <p className="font-medium">What will happen:</p>
                 <ul className="list-disc list-inside space-y-1 text-muted-foreground">
-                  <li>New embeddings will use {targetMode === 'local' ? '384' : targetMode === 'voyage' ? '1024' : '2048'} dimensions</li>
+                  <li>New embeddings will use {targetMode === 'voyage' ? '1024' : '2048'} dimensions</li>
                   <li>Future conversations will be indexed in new collections</li>
                   <li>Existing {currentMode} collections remain unchanged</li>
                   <li>You may need to re-import conversations for the new mode</li>

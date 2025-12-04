@@ -81,7 +81,7 @@ class ApiClient {
     return this.request('/settings/embedding');
   }
 
-  async updateEmbeddingMode(mode: 'local' | 'cloud' | 'voyage' | 'qwen') {
+  async updateEmbeddingMode(mode: 'voyage' | 'qwen') {
     return this.request('/settings/embedding/mode', {
       method: 'POST',
       body: JSON.stringify({ mode }),
@@ -121,6 +121,33 @@ class ApiClient {
 
   async getBatchJob(jobId: string) {
     return this.request(`/batch/jobs/${jobId}`);
+  }
+
+  // Workers endpoints
+  async listWorkers() {
+    return this.request('/workers/');
+  }
+
+  async getWorker(workerId: string) {
+    return this.request(`/workers/${workerId}`);
+  }
+
+  async removeWorker(workerId: string) {
+    return this.request(`/workers/${workerId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async startWorkerService(workerId: string, serviceName: string) {
+    return this.request(`/workers/${workerId}/services/${serviceName}/start`, {
+      method: 'POST',
+    });
+  }
+
+  async stopWorkerService(workerId: string, serviceName: string) {
+    return this.request(`/workers/${workerId}/services/${serviceName}/stop`, {
+      method: 'POST',
+    });
   }
 }
 

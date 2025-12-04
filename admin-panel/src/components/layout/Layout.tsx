@@ -7,6 +7,7 @@ import {
   Database,
   Settings as SettingsIcon,
   Container,
+  Server,
   FileText,
   Zap
 } from 'lucide-react'
@@ -22,7 +23,8 @@ const navigation = [
   { name: 'Imports', href: '/imports', icon: Download },
   { name: 'Collections', href: '/collections', icon: Database },
   { name: 'Batch Jobs', href: '/batch', icon: Zap },
-  { name: 'Docker', href: '/docker', icon: Container },
+  { name: 'Workers', href: '/workers', icon: Server },
+  { name: 'Docker (Local)', href: '/docker', icon: Container },
   { name: 'Logs', href: '/logs', icon: FileText },
   { name: 'Settings', href: '/settings', icon: SettingsIcon },
 ]
