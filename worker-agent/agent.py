@@ -534,7 +534,7 @@ async def send_heartbeat(
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
             response = await client.post(
-                f"{api_url}/workers/heartbeat",
+                f"{api_url}/api/workers/heartbeat",
                 json=heartbeat
             )
 
