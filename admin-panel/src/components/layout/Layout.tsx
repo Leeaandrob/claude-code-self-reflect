@@ -6,7 +6,6 @@ import {
   Download,
   Database,
   Settings as SettingsIcon,
-  Container,
   Server,
   FileText,
   Zap
@@ -24,7 +23,6 @@ const navigation = [
   { name: 'Collections', href: '/collections', icon: Database },
   { name: 'Batch Jobs', href: '/batch', icon: Zap },
   { name: 'Workers', href: '/workers', icon: Server },
-  { name: 'Docker (Local)', href: '/docker', icon: Container },
   { name: 'Logs', href: '/logs', icon: FileText },
   { name: 'Settings', href: '/settings', icon: SettingsIcon },
 ]

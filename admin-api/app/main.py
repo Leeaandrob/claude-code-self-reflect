@@ -14,7 +14,7 @@ if env_path.exists():
     load_dotenv(env_path)
     logging.info(f"Loaded environment from {env_path}")
 
-from .routers import dashboard, projects, imports, collections, settings, docker, logs, batch, workers
+from .routers import dashboard, projects, imports, collections, settings, logs, batch, workers
 
 # Setup logging
 logging.basicConfig(
@@ -45,7 +45,6 @@ app.include_router(projects.router, prefix="/api/projects", tags=["Projects"])
 app.include_router(imports.router, prefix="/api/imports", tags=["Imports"])
 app.include_router(collections.router, prefix="/api/collections", tags=["Collections"])
 app.include_router(settings.router, prefix="/api/settings", tags=["Settings"])
-app.include_router(docker.router, prefix="/api/docker", tags=["Docker"])
 app.include_router(logs.router, prefix="/api/logs", tags=["Logs"])
 app.include_router(batch.router, prefix="/api/batch", tags=["Batch Jobs"])
 app.include_router(workers.router, prefix="/api/workers", tags=["Workers"])

@@ -149,6 +149,10 @@ class ApiClient {
       method: 'POST',
     });
   }
+
+  async getWorkerServiceLogs(workerId: string, serviceName: string, lines: number = 100) {
+    return this.request(`/workers/${workerId}/services/${serviceName}/logs?lines=${lines}`);
+  }
 }
 
 export const api = new ApiClient(API_BASE_URL);
