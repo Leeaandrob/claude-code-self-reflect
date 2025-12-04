@@ -123,6 +123,61 @@ class ApiClient {
     return this.request(`/batch/jobs/${jobId}`);
   }
 
+  async createBatchJob(conversationIds: string[], project?: string, model = 'qwen-plus') {
+    return this.request('/batch/jobs', {
+      method: 'POST',
+      body: JSON.stringify({
+        conversation_ids: conversationIds,
+        project,
+        model,
+      }),
+    });
+  }
+
+  async refreshBatchJob(jobId: string) {
+    return this.request(`/batch/jobs/${jobId}/refresh`, {
+      method: 'POST',
+    });
+  }
+
+  async cancelBatchJob(jobId: string) {
+    return this.request(`/batch/jobs/${jobId}/cancel`, {
+      method: 'POST',
+    });
+  }
+
+  async getBatchResults(jobId: string) {
+    return this.request(`/batch/jobs/${jobId}/results`);
+  }
+
+  async processBatchResults(jobId: string) {
+    return this.request(`/batch/jobs/${jobId}/process`, {
+      method: 'POST',
+    });
+  }
+
+  async getPendingConversations(project?: string, limit = 100) {
+    const params = new URLSearchParams();
+    if (project) params.append('project', project);
+    params.append('limit', limit.toString());
+    return this.request(`/batch/conversations/pending?${params}`);
+  }
+
+  async getBatchModels() {
+    return this.request('/batch/models');
+  }
+
+  async searchNarratives(query: string, project?: string, limit = 10) {
+    const params = new URLSearchParams({ query, limit: limit.toString() });
+    if (project) params.append('project', project);
+    return this.request(`/batch/narratives/search?${params}`);
+  }
+
+  async getNarrativeStats(project?: string) {
+    const params = project ? `?project=${project}` : '';
+    return this.request(`/batch/narratives/stats${params}`);
+  }
+
   // Workers endpoints
   async listWorkers() {
     return this.request('/workers/');

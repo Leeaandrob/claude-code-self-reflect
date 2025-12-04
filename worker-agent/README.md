@@ -10,6 +10,7 @@ A Docker-based agent that runs on each machine where Claude Self-Reflect is inst
 - **System Metrics**: Reports CPU, memory, disk usage
 - **Qdrant Stats**: Reports vector count and collection status
 - **Import Progress**: Reports file import status from unified-state.json
+- **Auto-Batch Narratives**: Automatically generates AI narratives for new conversations
 
 ## Quick Install
 
@@ -94,6 +95,10 @@ The worker stack includes:
 | `CLAUDE_LOGS_PATH` | `~/.claude/projects` | Path to Claude conversation logs |
 | `VOYAGE_KEY` | - | Voyage AI API key |
 | `DASHSCOPE_API_KEY` | - | DashScope API key |
+| `AUTO_BATCH_ENABLED` | `false` | Enable automatic narrative generation |
+| `AUTO_BATCH_THRESHOLD` | `10` | Min conversations to trigger batch |
+| `AUTO_BATCH_INTERVAL` | `3600` | Check interval in seconds (1 hour) |
+| `AUTO_BATCH_MODEL` | `qwen-plus` | Model for narrative generation |
 
 ### Agent API Endpoints
 

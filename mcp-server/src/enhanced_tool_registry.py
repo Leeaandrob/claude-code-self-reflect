@@ -405,3 +405,128 @@ def register_enhanced_search_tools(mcp, tools):
         Returns file path for agents to read complete conversations!
         """
         return await tools.get_full_conversation(ctx, conversation_id, project)
+
+
+def register_narrative_tools(mcp, search_tools):
+    """Register narrative search tools for AI-generated summaries."""
+    from .narrative_tools import narrative_tools
+
+    @mcp.tool(name="csr_search_narratives")
+    async def csr_search_narratives(
+        ctx: Context,
+        query: str = Field(
+            description="Semantic search query for narratives"
+        ),
+        project: Optional[str] = Field(
+            default=None,
+            description="Search specific project only"
+        ),
+        limit: int = Field(
+            default=5,
+            description="Maximum results to return"
+        ),
+        min_score: float = Field(
+            default=0.3,
+            description="Minimum similarity score (0-1)"
+        )
+    ) -> str:
+        """Search AI-generated narratives for high-level context about past work.
+
+        WHEN TO USE THIS TOOL:
+        - User needs quick understanding of past solutions
+        - Looking for architectural decisions made
+        - Searching for patterns and best practices
+        - Onboarding to unfamiliar parts of the codebase
+
+        EXAMPLES THAT TRIGGER THIS TOOL:
+        - "What decisions did we make about authentication?"
+        - "How did we solve similar performance issues?"
+        - "What were the key learnings from the database migration?"
+        - "Find solutions to similar bugs"
+
+        Narratives provide structured summaries including:
+        - Problem description
+        - Solution implemented
+        - Technical decisions made
+        - Files modified
+        - Key insights and learnings
+
+        Use this for high-level context before diving into code details!
+        """
+        return await narrative_tools.search_narratives(ctx, query, project, limit, min_score)
+
+    @mcp.tool(name="csr_hybrid_search")
+    async def csr_hybrid_search(
+        ctx: Context,
+        query: str = Field(
+            description="Semantic search query"
+        ),
+        project: Optional[str] = Field(
+            default=None,
+            description="Search specific project only"
+        ),
+        limit: int = Field(
+            default=5,
+            description="Maximum results per category"
+        ),
+        min_score: float = Field(
+            default=0.3,
+            description="Minimum similarity score (0-1)"
+        ),
+        include_narratives: bool = Field(
+            default=True,
+            description="Include AI-generated narrative summaries"
+        ),
+        include_chunks: bool = Field(
+            default=True,
+            description="Include conversation chunks with code details"
+        )
+    ) -> str:
+        """Perform hybrid search combining narratives and conversation chunks.
+
+        WHEN TO USE THIS TOOL:
+        - User needs both high-level understanding AND code details
+        - Complex debugging requiring context and specifics
+        - Code review needing historical decisions plus implementation
+        - Comprehensive research on a topic
+
+        EXAMPLES THAT TRIGGER THIS TOOL:
+        - "Tell me everything about how we implemented caching"
+        - "Give me full context on the authentication refactor"
+        - "What do we know about the payment integration?"
+        - "Complete history of our Docker setup"
+
+        Returns two result sets:
+        1. NARRATIVES: High-level summaries, decisions, solutions
+        2. CHUNKS: Specific code, detailed discussions, exact implementations
+
+        Best of both worlds - use for comprehensive understanding!
+        """
+        return await narrative_tools.hybrid_search(
+            ctx, query, search_tools, project, limit, min_score,
+            include_narratives, include_chunks
+        )
+
+    @mcp.tool(name="csr_narrative_stats")
+    async def csr_narrative_stats(
+        ctx: Context,
+        project: Optional[str] = Field(
+            default=None,
+            description="Specific project or None for all"
+        )
+    ) -> str:
+        """Get statistics about stored narratives.
+
+        WHEN TO USE THIS TOOL:
+        - Checking if narratives are available for a project
+        - Understanding coverage of narrative generation
+        - Monitoring batch job results
+
+        EXAMPLES THAT TRIGGER THIS TOOL:
+        - "How many narratives do we have?"
+        - "Are there narratives for this project?"
+        - "What's the narrative coverage?"
+
+        Returns counts of narratives per project collection.
+        """
+        return await narrative_tools.get_narrative_stats(ctx, project)

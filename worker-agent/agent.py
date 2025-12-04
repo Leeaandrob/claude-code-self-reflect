@@ -62,7 +62,13 @@ except ImportError:
 from dotenv import load_dotenv
 
 # Version
-AGENT_VERSION = "2.0.0"
+AGENT_VERSION = "2.1.0"
+
+# Auto-batch configuration
+AUTO_BATCH_ENABLED = os.getenv('AUTO_BATCH_ENABLED', 'false').lower() == 'true'
+AUTO_BATCH_THRESHOLD = int(os.getenv('AUTO_BATCH_THRESHOLD', '10'))  # Min conversations to trigger batch
+AUTO_BATCH_INTERVAL = int(os.getenv('AUTO_BATCH_INTERVAL', '3600'))  # Check interval in seconds (1 hour)
+AUTO_BATCH_MODEL = os.getenv('AUTO_BATCH_MODEL', 'qwen-plus')
 
 # Setup logging
 logging.basicConfig(
@@ -79,6 +85,8 @@ agent_state = {
     'last_heartbeat': None,
     'compose_file': None,
     'services_dir': None,
+    'last_batch_check': None,
+    'pending_batch_job': None,
 }
 
 
@@ -556,6 +564,81 @@ async def send_heartbeat(
         return False
 
 
+async def check_pending_narratives(api_url: str) -> list:
+    """Check for conversations without narratives."""
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.get(
+                f"{api_url}/api/batch/conversations/pending",
+                params={'limit': 500}
+            )
+            if response.status_code == 200:
+                data = response.json()
+                return data.get('conversations', [])
+    except Exception as e:
+        logger.error(f"Error checking pending narratives: {e}")
+    return []
+
+
+async def create_batch_job(api_url: str, conversation_ids: list, model: str) -> Optional[str]:
+    """Create a batch job for narrative generation."""
+    try:
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            response = await client.post(
+                f"{api_url}/api/batch/jobs",
+                json={
+                    'conversation_ids': conversation_ids,
+                    'model': model
+                }
+            )
+            if response.status_code == 200:
+                data = response.json()
+                return data.get('job', {}).get('batch_id')
+            else:
+                logger.warning(f"Failed to create batch job: {response.text}")
+    except Exception as e:
+        logger.error(f"Error creating batch job: {e}")
+    return None
+
+
+async def auto_batch_loop(api_url: str):
+    """Background loop to automatically create batch jobs for pending narratives."""
+    if not AUTO_BATCH_ENABLED:
+        logger.info("Auto-batch disabled, skipping auto_batch_loop")
+        return
+
+    logger.info(f"Auto-batch enabled: threshold={AUTO_BATCH_THRESHOLD}, interval={AUTO_BATCH_INTERVAL}s, model={AUTO_BATCH_MODEL}")
+
+    while True:
+        try:
+            agent_state['last_batch_check'] = datetime.utcnow().isoformat()
+
+            # Check for pending conversations
+            pending = await check_pending_narratives(api_url)
+
+            if len(pending) >= AUTO_BATCH_THRESHOLD:
+                logger.info(f"Found {len(pending)} conversations without narratives, creating batch job")
+
+                # Get conversation IDs
+                conversation_ids = [c['id'] for c in pending]
+
+                # Create batch job
+                job_id = await create_batch_job(api_url, conversation_ids, AUTO_BATCH_MODEL)
+
+                if job_id:
+                    agent_state['pending_batch_job'] = job_id
+                    logger.info(f"Created batch job {job_id} for {len(conversation_ids)} conversations")
+                else:
+                    logger.warning("Failed to create batch job")
+            else:
+                logger.debug(f"Only {len(pending)} pending conversations, threshold is {AUTO_BATCH_THRESHOLD}")
+
+        except Exception as e:
+            logger.error(f"Error in auto_batch_loop: {e}")
+
+        await asyncio.sleep(AUTO_BATCH_INTERVAL)
+
+
 async def heartbeat_loop(
     api_url: str,
     interval: int,
@@ -622,11 +705,20 @@ async def run_agent(
     )
     server = uvicorn.Server(config)
 
-    # Run both tasks concurrently
-    await asyncio.gather(
+    # Run all tasks concurrently
+    tasks = [
         server.serve(),
         heartbeat_loop(api_url, interval, state_file, qdrant_url, local_port)
-    )
+    ]
+
+    # Add auto-batch loop if enabled
+    if AUTO_BATCH_ENABLED:
+        logger.info("Auto-batch for narratives is ENABLED")
+        tasks.append(auto_batch_loop(api_url))
+    else:
+        logger.info("Auto-batch for narratives is DISABLED (set AUTO_BATCH_ENABLED=true to enable)")
+
+    await asyncio.gather(*tasks)
 
 
 def main():

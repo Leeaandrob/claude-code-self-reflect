@@ -33,6 +33,7 @@ from .temporal_tools import register_temporal_tools
 from .search_tools import register_search_tools
 from .reflection_tools import register_reflection_tools
 from .code_reload_tool import register_code_reload_tool
+from .enhanced_tool_registry import register_narrative_tools
 from pydantic import BaseModel, Field
 from qdrant_client import AsyncQdrantClient, models
 from qdrant_client.models import (
@@ -740,6 +741,9 @@ register_code_reload_tool(
     mcp,
     get_embedding_manager
 )
+
+# Register narrative search tools (hybrid search with AI-generated summaries)
+register_narrative_tools(mcp, search_tools)
 
 # Run the server
 if __name__ == "__main__":
