@@ -242,8 +242,10 @@ def get_unified_state_stats(state_file: Path) -> dict:
 
         files = state.get('files', {})
         stats['imported_files'] = len(files)
+
+        # Count total chunks/messages (field is 'chunks' in current format)
         stats['total_messages'] = sum(
-            f.get('message_count', 0) for f in files.values()
+            f.get('chunks', f.get('message_count', 0)) for f in files.values()
         )
 
         # Try to count total files in Claude logs

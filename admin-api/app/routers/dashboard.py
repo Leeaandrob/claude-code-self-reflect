@@ -135,9 +135,13 @@ async def get_system_stats():
         # Always use unified state data if available
         # Even if projects dict is empty, we may have files data
         if files and len(files) > 0:
-            # Extract recent imports from files
+            # Extract recent imports from files (only completed ones)
             recent_files = []
             for file_path, file_data in files.items():
+                # Skip files that are not completed
+                if file_data.get("status") != "completed":
+                    continue
+
                 # Extract project name from file path
                 # Path format: /logs/-home-leeaandrob-Projects-Personal-project-name/file.jsonl
                 project_name = ""
