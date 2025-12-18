@@ -53,6 +53,12 @@ RUN chmod +x /app/src/runtime/*.sh /app/src/runtime/*.py
 # Create config directory
 RUN mkdir -p /config
 
+# Create non-root user with UID 1000 to match host user
+ARG HOST_UID=1000
+RUN useradd -m -u ${HOST_UID} appuser && \
+    chown -R appuser:appuser /app /config
+USER appuser
+
 # Set environment variables for memory management
 ENV PYTHONUNBUFFERED=1
 ENV MALLOC_ARENA_MAX=2
