@@ -471,9 +471,16 @@ class BatchService:
     async def get_conversations_without_narrative(
         self,
         project: Optional[str] = None,
-        limit: int = 100
+        limit: int = 100,
+        validate_existence: bool = True
     ) -> List[Dict[str, Any]]:
-        """Get conversations that don't have narratives yet."""
+        """Get conversations that don't have narratives yet.
+
+        Args:
+            project: Filter by project hash
+            limit: Maximum number of conversations to return
+            validate_existence: If True, only return conversations where file exists
+        """
         if not UNIFIED_STATE_FILE.exists():
             return []
 
@@ -482,6 +489,7 @@ class BatchService:
 
         files_data = state.get('files', {})
         conversations = []
+        skipped_missing = 0
 
         for file_path_key, file_info in files_data.items():
             # Skip if already has narrative
@@ -490,6 +498,11 @@ class BatchService:
 
             # Skip non-completed files
             if file_info.get('status') != 'completed':
+                continue
+
+            # Validate file exists if requested
+            if validate_existence and not Path(file_path_key).exists():
+                skipped_missing += 1
                 continue
 
             # Extract project from collection name (conv_{hash}_qwen_1024d)
@@ -513,6 +526,9 @@ class BatchService:
                 "chunks": file_info.get('chunks', 0),
                 "imported_at": file_info.get('imported_at', '')
             })
+
+        if skipped_missing > 0:
+            logger.info(f"Skipped {skipped_missing} conversations with missing files")
 
         # Sort by import date (newest first)
         conversations.sort(key=lambda x: x['imported_at'], reverse=True)

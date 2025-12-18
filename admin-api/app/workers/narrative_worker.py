@@ -7,11 +7,13 @@ and automatically generates them using DashScope Batch API.
 
 Architecture:
 1. Scan unified-state for conversations with status=completed and no has_narrative
-2. Group into batches (configurable size, default 50)
-3. Submit to DashScope Batch API
-4. Poll until completion
-5. Process results and store narratives in Qdrant
-6. Update unified-state with has_narrative=true
+2. Filter out non-existent files (orphaned entries from deleted projects)
+3. Group into batches (configurable size, default 50)
+4. Submit to DashScope Batch API
+5. Poll until completion
+6. Process results and store narratives in Qdrant
+7. Update unified-state with has_narrative=true
+8. Periodically clean up orphaned entries
 """
 
 import os
@@ -22,7 +24,7 @@ import logging
 import aiofiles
 from pathlib import Path
 from datetime import datetime, timedelta
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple
 
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
@@ -45,13 +47,79 @@ MIN_CONVERSATIONS_FOR_BATCH = int(os.getenv('NARRATIVE_MIN_BATCH', '5'))
 MAX_CONCURRENT_BATCHES = int(os.getenv('NARRATIVE_MAX_CONCURRENT', '3'))
 NARRATIVE_MODEL = os.getenv('NARRATIVE_MODEL', 'qwen-plus')
 COOLDOWN_AFTER_BATCH_MINUTES = int(os.getenv('NARRATIVE_COOLDOWN', '10'))
+# Cleanup orphaned entries every N cycles (default: every 12 cycles = 1 hour with 5min interval)
+CLEANUP_INTERVAL_CYCLES = int(os.getenv('NARRATIVE_CLEANUP_INTERVAL', '12'))
+# Enable newest-first ordering (prioritize recent conversations)
+NEWEST_FIRST = os.getenv('NARRATIVE_NEWEST_FIRST', 'true').lower() == 'true'
 
 # Track active batches
 active_batches: Dict[str, Dict[str, Any]] = {}
+# Track cleanup cycles
+_cleanup_cycle_counter = 0
+
+
+async def cleanup_orphaned_entries() -> Tuple[int, int]:
+    """
+    Remove entries from unified-state where the source file no longer exists.
+    Returns tuple of (total_checked, removed_count).
+
+    Note: This function is resilient to permission errors - it will log
+    a warning but not crash the worker if it cannot write to the state file.
+    """
+    if not UNIFIED_STATE_FILE.exists():
+        return 0, 0
+
+    try:
+        async with aiofiles.open(UNIFIED_STATE_FILE, 'r') as f:
+            state = json.loads(await f.read())
+    except Exception as e:
+        logger.warning(f"Could not read unified state for cleanup: {e}")
+        return 0, 0
+
+    files_data = state.get('files', {})
+    original_count = len(files_data)
+    orphaned_paths = []
+
+    for file_path in files_data.keys():
+        if not Path(file_path).exists():
+            orphaned_paths.append(file_path)
+
+    if orphaned_paths:
+        for path in orphaned_paths:
+            del files_data[path]
+
+        try:
+            # Save updated state
+            async with aiofiles.open(UNIFIED_STATE_FILE, 'w') as f:
+                await f.write(json.dumps(state, indent=2))
+
+            logger.info(
+                f"Cleanup: removed {len(orphaned_paths)} orphaned entries "
+                f"(files no longer exist)"
+            )
+        except PermissionError:
+            logger.warning(
+                f"Permission denied writing unified-state. "
+                f"Found {len(orphaned_paths)} orphaned entries but cannot remove. "
+                f"Run cleanup via admin API instead."
+            )
+            return original_count, 0
+        except Exception as e:
+            logger.warning(f"Could not save cleanup results: {e}")
+            return original_count, 0
+
+    return original_count, len(orphaned_paths)
 
 
 async def get_conversations_without_narrative(limit: int = 500) -> List[Dict[str, Any]]:
-    """Get conversations that need narrative generation."""
+    """Get conversations that need narrative generation.
+
+    Only returns conversations where:
+    - status=completed
+    - has_narrative is not set
+    - chunks > 0
+    - THE FILE ACTUALLY EXISTS on disk
+    """
     if not UNIFIED_STATE_FILE.exists():
         logger.warning("Unified state file not found")
         return []
@@ -61,18 +129,30 @@ async def get_conversations_without_narrative(limit: int = 500) -> List[Dict[str
 
     files_data = state.get('files', {})
     conversations = []
+    skipped_missing = 0
+    skipped_has_narrative = 0
+    skipped_not_completed = 0
+    skipped_empty = 0
 
     for file_path, file_info in files_data.items():
         # Skip if already has narrative
         if file_info.get('has_narrative'):
+            skipped_has_narrative += 1
             continue
 
         # Only process completed imports
         if file_info.get('status') != 'completed':
+            skipped_not_completed += 1
             continue
 
         # Skip files with 0 chunks (empty conversations)
         if file_info.get('chunks', 0) == 0:
+            skipped_empty += 1
+            continue
+
+        # CRITICAL FIX: Verify file exists before adding to list
+        if not Path(file_path).exists():
+            skipped_missing += 1
             continue
 
         # Extract project from collection name
@@ -95,10 +175,19 @@ async def get_conversations_without_narrative(limit: int = 500) -> List[Dict[str
             'imported_at': file_info.get('imported_at', '')
         })
 
-    # Sort by import date (oldest first - FIFO)
-    conversations.sort(key=lambda x: x['imported_at'] or '')
+    # Sort by import date - NEWEST FIRST to prioritize recent conversations
+    # This ensures new conversations get narratives quickly while backfill happens gradually
+    conversations.sort(key=lambda x: x['imported_at'] or '', reverse=NEWEST_FIRST)
 
-    logger.info(f"Found {len(conversations)} conversations without narratives")
+    logger.info(
+        f"Conversations stats: "
+        f"valid={len(conversations)}, "
+        f"has_narrative={skipped_has_narrative}, "
+        f"missing_file={skipped_missing}, "
+        f"not_completed={skipped_not_completed}, "
+        f"empty={skipped_empty}"
+    )
+
     return conversations[:limit]
 
 
@@ -304,6 +393,8 @@ async def run_worker_cycle():
 
 async def worker_loop():
     """Main worker loop."""
+    global _cleanup_cycle_counter
+
     logger.info("=" * 60)
     logger.info("Narrative Worker Starting")
     logger.info("=" * 60)
@@ -315,10 +406,24 @@ async def worker_loop():
     logger.info(f"  MAX_CONCURRENT: {MAX_CONCURRENT_BATCHES}")
     logger.info(f"  MODEL: {NARRATIVE_MODEL}")
     logger.info(f"  COOLDOWN: {COOLDOWN_AFTER_BATCH_MINUTES}min")
+    logger.info(f"  CLEANUP_INTERVAL: every {CLEANUP_INTERVAL_CYCLES} cycles")
+    logger.info(f"  NEWEST_FIRST: {NEWEST_FIRST}")
     logger.info("=" * 60)
+
+    # Run initial cleanup on startup
+    logger.info("Running initial cleanup of orphaned entries...")
+    total, removed = await cleanup_orphaned_entries()
+    logger.info(f"Initial cleanup: {removed}/{total} orphaned entries removed")
 
     while True:
         try:
+            # Periodic cleanup of orphaned entries
+            _cleanup_cycle_counter += 1
+            if _cleanup_cycle_counter >= CLEANUP_INTERVAL_CYCLES:
+                _cleanup_cycle_counter = 0
+                logger.info("Running periodic cleanup of orphaned entries...")
+                await cleanup_orphaned_entries()
+
             await run_worker_cycle()
         except Exception as e:
             logger.error(f"Error in worker cycle: {e}")

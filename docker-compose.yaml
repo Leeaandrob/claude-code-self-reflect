@@ -49,7 +49,7 @@ services:
     depends_on:
       - qdrant
     volumes:
-      - ${CONFIG_PATH:-${HOME}/.claude-self-reflect/config}:/config:ro
+      - ${CONFIG_PATH:-${HOME}/.claude-self-reflect/config}:/config  # rw for cleanup/backfill
       - ${CLAUDE_LOGS_PATH:-${HOME}/.claude/projects}:/logs:ro
     environment:
       - QDRANT_URL=http://qdrant:6333
